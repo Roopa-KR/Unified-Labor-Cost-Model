@@ -1,0 +1,14 @@
+{% extends 'base.html' %}
+{% block filters %}<form class="filters" method="get">{{ui.period_select(period,periods)}}</form>{% endblock %}
+{% block content %}
+<section class="panel">
+ <div class="panel-head"><div><h2>Read-only endpoints</h2><p class="muted">Same calculations as the dashboards · sign-in required · only the period argument is accepted · no AI calls are made in this release</p></div></div>
+ <ul class="list">
+  <li><span class="what"><a href="/api/summary?period={{period}}">/api/summary</a></span><span class="muted">Labor cost summary</span></li>
+  <li><span class="what"><a href="/api/tools/cost_by_worktype?period={{period}}">/api/tools/cost_by_worktype</a></span><span class="muted">Cost by work type</span></li>
+  {% if can_drill %}<li><span class="what"><a href="/api/tools/operator_cost_distribution?period={{period}}">/api/tools/operator_cost_distribution</a></span><span class="muted">Operator productive and unproductive cost</span></li>{% endif %}
+  <li><span class="what"><a href="/api/tools/budget_variance?period={{period}}">/api/tools/budget_variance</a></span><span class="muted">Budget variance bridge</span></li>
+  <li><span class="what"><a href="/api/tools/reconciliation?period={{period}}">/api/tools/reconciliation</a></span><span class="muted">Reconciliation controls</span></li>
+ </ul>
+</section>
+{% endblock %}

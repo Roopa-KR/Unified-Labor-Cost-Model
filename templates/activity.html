@@ -1,0 +1,32 @@
+{% extends 'base.html' %}
+{% block crumbs %}<nav class="crumbs" aria-label="Breadcrumb"><a href="{{url_for('view',page='activities',**f.query())}}">Work types</a><span aria-hidden="true">/</span><span>{{title}}</span></nav>{% endblock %}
+{% block badges %}{% if standard %}<span class="chip">Standard {{standard.units_per_hour|int}} lines/h</span>{% else %}<span class="chip">No validated standard</span>{% endif %}{% endblock %}
+{% block filters %}{{ui.op_filters(f,period,periods)}}{% endblock %}
+{% block content %}
+{% set lines=rows|sum(attribute='lines') %}{% set direct=rows|sum(attribute='h_direct') %}{% set earned=rows|sum(attribute='earned_h') %}{% set cost=rows|sum(attribute='cost_direct') %}{% set std=rows|selectattr('std_cost')|sum(attribute='std_cost') %}
+{% if can_drill %}
+<section class="kpis">
+ {{ui.kpi('Direct labor cost', cost|usd0, rows|length ~ ' operators', lead=True)}}
+ {{ui.kpi('Lines', lines|int)}}
+ {{ui.kpi('Cost per line', (cost/lines if lines else none)|usd, 'Standard ' ~ ((std/lines if lines else none)|usd))}}
+ {{ui.kpi('Direct hours', direct|hours, earned|hours ~ ' standard')}}
+ {{ui.kpi('Pace vs standard', (earned/direct if direct and earned else none)|pct)}}
+ {{ui.kpi('Actual vs standard', (cost-std)|signed)}}
+</section>
+<section class="panel">
+ <div class="panel-head"><div><h2>Operators on this work type</h2><p class="muted">Direct cost includes slow-pace time; standard cost uses each operator's straight-time loaded rate</p></div></div>
+ <div class="table-wrap limit"><table>
+  <thead><tr><th>Operator</th><th class="num">Lines</th><th class="num">Pieces</th><th class="num">Direct hours</th><th class="num">Standard hours</th><th class="num">Pace</th><th class="num">Not performed</th><th class="num">Direct cost</th><th class="num">Standard cost</th><th class="num">Variance</th><th class="num">Cost / line</th></tr></thead>
+  <tbody>{% for r in rows %}{% set href=url_for('operator',worker=r.worker,**f.query()) %}<tr class="clickable" data-href="{{href}}" tabindex="0">
+   <td><a class="row-link" href="{{href}}">{{r.worker}}</a><span class="sub">{{ui.shift_label(r.shift)}}{{' · Agency' if r.emp=='temporary_agency'}}</span></td>
+   <td class="num">{{r.lines|int}}</td><td class="num">{{r.pieces|int}}</td><td class="num">{{r.h_direct|hours}}</td><td class="num">{{r.earned_h|hours}}</td>
+   <td class="num">{% if r.pace is not none and r.pace<0.9 %}<span class="chip warn">{{r.pace|pct}}</span>{% else %}{{r.pace|pct}}{% endif %}</td>
+   <td class="num">{{r.h_not|hours if r.h_not>=0.05 else '—'}}</td><td class="num">{{r.cost_direct|usd}}</td><td class="num">{{r.std_cost|usd}}</td>
+   <td class="num {{'pos' if r.variance and r.variance>0 else 'neg' if r.variance and r.variance<0}}">{{r.variance|signed}}</td><td class="num">{{r.cost_per_line|usd}}</td></tr>
+  {% else %}<tr><td colspan="11" class="empty">No operators worked this type in the selected range.</td></tr>{% endfor %}</tbody>
+ </table></div>
+</section>
+{% else %}
+<div class="callout">{{ui.icon('info')}}<span>Operator-level detail is available to Finance and Supervisor roles.</span></div>
+{% endif %}
+{% endblock %}

@@ -1,0 +1,56 @@
+{% extends 'base.html' %}
+{% block filters %}{{ui.op_filters(f,period,periods)}}{% endblock %}
+{% block content %}
+{% set ctrl_keys=['productive','policy','operational','operator','undetermined','other'] %}
+{% set failed=checks|selectattr('difference_cents','ne',0)|list %}
+<section class="kpis">
+ {{ui.kpi('Loaded cost allocated', t.cost|usd, t.operators ~ ' operators', lead=True)}}
+ {{ui.kpi('Productive', t.cost_productive|usd0, ((t.cost_productive/t.cost) if t.cost else none)|pct)}}
+ {{ui.kpi('Unproductive time', t.cost_unproductive|usd0, (t.hours-t.h_productive)|hours)}}
+ {{ui.kpi('Non-time charges', t.cost_control.get('other',0)|usd0, 'Agency fees')}}
+ {{ui.kpi('Straight-time loaded rate', t.st_rate|rate, 'Overtime ' ~ (t.ot_rate|rate))}}
+ {{ui.kpi('Allocation controls', ('All reconcile' if not failed else failed|length ~ ' differ'), checks|length ~ ' checks', href=url_for('view',page='reconciliation',period=period))}}
+</section>
+
+<section class="panel">
+ <div class="panel-head"><div><h2>Cost component by control group</h2><p class="muted">Each posted dollar, by where the paid time went</p></div>{{ui.legend(ctrl_keys)}}</div>
+ <div class="table-wrap"><table>
+  <thead><tr><th>Component</th>{% for k in ctrl_keys %}<th class="num">{{CONTROLS[k][0]}}</th>{% endfor %}<th class="num">Total</th></tr></thead>
+  <tbody>{% for key,label,_ in groups if matrix.get(key) %}{% set row=matrix[key] %}<tr><td>{{label}}</td>{% for k in ctrl_keys %}<td class="num">{{row.get(k)|usd0 if row.get(k) else '—'}}</td>{% endfor %}<td class="num"><b>{{row.values()|sum|usd0}}</b></td></tr>{% endfor %}</tbody>
+  <tfoot><tr><td>Total</td>{% for k in ctrl_keys %}<td class="num">{{t.cost_control.get(k,0)|usd0}}</td>{% endfor %}<td class="num">{{t.cost|usd0}}</td></tr></tfoot>
+ </table></div>
+</section>
+
+<div class="grid">
+ <section class="panel span-7">
+  <div class="panel-head"><div><h2>Cost categories</h2><p class="muted">Hours × applicable loaded rate</p></div></div>
+  <div class="table-wrap"><table>
+   <thead><tr><th>Category</th><th>Control</th><th class="num">Hours</th><th class="num">Cost</th><th class="num">Loaded rate</th><th class="num">Share</th></tr></thead>
+   <tbody>{% for b in buckets %}<tr {% if b.hours %}class="clickable" data-href="{{url_for('view',page='operators',sort=b.bucket,**f.query())}}" tabindex="0"{% endif %}><td><i class="swatch" style="background:{{b.color}}"></i>{{b.label}}</td><td class="muted nowrap">{{b.control_label}}</td><td class="num">{{b.hours|hours if b.hours else '—'}}</td><td class="num">{{b.cents|usd0}}</td><td class="num">{{b.rate|rate}}</td><td class="num" style="width:130px">{{ui.share(b.cents,t.cost,b.color)}}</td></tr>{% endfor %}</tbody>
+   <tfoot><tr><td colspan="2">Total</td><td class="num">{{t.hours|hours}}</td><td class="num">{{t.cost|usd0}}</td><td class="num">{{t.loaded_rate|rate}}</td><td class="num">100%</td></tr></tfoot>
+  </table></div>
+ </section>
+ <section class="panel span-5">
+  <div class="panel-head"><h2>How cost is distributed</h2></div>
+  <div class="panel-body"><dl class="kv">
+   <dt>Loaded cost</dt><dd>Posted wages, premiums, employer taxes, benefits, insurance and agency billing for the operator</dd>
+   <dt>Applicable rate</dt><dd>Straight-time cost spreads over all paid hours; overtime premiums go only to overtime hours, derived from paid attendance under the assigned pay policy</dd>
+   <dt>Category cost</dt><dd>Hours in the category × applicable loaded rate, in exact cents</dd>
+   <dt>Slow-pace time</dt><dd>Direct hours beyond standard hours for the lines completed that day; wages are not changed</dd>
+   <dt>Not in time</dt><dd>Paid leave and agency fees stay as their own lines; unpaid meals carry no cost</dd>
+  </dl></div>
+  <div class="panel-foot"><a href="{{url_for('view',page='settings')}}">Cost policy settings</a></div>
+ </section>
+</div>
+
+<section class="panel">
+ <div class="panel-head"><div><h2>Operator reconciliation</h2><p class="muted">Allocated cost versus posted source cost per operator</p></div><a class="btn" href="{{url_for('export_operators',**f.query())}}">{{ui.icon('download')}}Export CSV</a></div>
+ {% if f.custom_dates %}<div class="callout" style="margin:12px 16px">{{ui.icon('info')}}<span>Posted source cost is weekly, so it is compared only for whole pay periods. Clear the date range to reconcile.</span></div>{% endif %}
+ <div class="table-wrap limit"><table>
+  <thead><tr><th>Operator</th><th class="num">Posted cost</th><th class="num">Productive</th><th class="num">Unproductive</th><th class="num">Non-time</th><th class="num">Allocated</th><th class="num">Difference</th></tr></thead>
+  <tbody>{% for r in operators|sort(attribute='worker') %}{% set p=posted.get(r.worker,0) %}<tr class="clickable" data-href="{{url_for('operator',worker=r.worker,**f.query())}}" tabindex="0">
+   <td><a class="row-link" href="{{url_for('operator',worker=r.worker,**f.query())}}">{{r.worker}}</a></td><td class="num">{{p|usd if not f.custom_dates else '—'}}</td><td class="num">{{r.cost_productive|usd}}</td><td class="num">{{r.cost_unproductive|usd}}</td><td class="num">{{r.cost_control.get('other',0)|usd if r.cost_control.get('other') else '—'}}</td><td class="num">{{r.cost|usd}}</td>
+   <td class="num">{% if f.custom_dates %}—{% elif p==r.cost %}<span class="chip good">{{ui.icon('check')}}$0.00</span>{% else %}<span class="chip bad">{{(p-r.cost)|usd}}</span>{% endif %}</td></tr>{% endfor %}</tbody>
+ </table></div>
+</section>
+{% endblock %}

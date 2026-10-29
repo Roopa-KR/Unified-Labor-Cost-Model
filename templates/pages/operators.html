@@ -1,0 +1,54 @@
+{% extends 'base.html' %}
+{% block filters %}{{ui.op_filters(f,period,periods,search=True)}}{% endblock %}
+{% block content %}
+<section class="kpis">
+ {{ui.kpi('Operators', t.operators, (t.flagged ~ ' flagged'))}}
+ {{ui.kpi('Loaded labor cost', t.cost|usd0, t.cost_productive|usd0 ~ ' productive')}}
+ {{ui.kpi('Paid hours', t.hours|hours, t.h_productive|hours ~ ' productive')}}
+ {{ui.kpi('Utilization', t.utilization|pct, 'productive ÷ paid hours')}}
+ {{ui.kpi('Pace vs standard', t.pace|pct, 'standard ÷ direct hours')}}
+ {{ui.kpi('Cost per line', t.cost_per_line|usd, t.lines|int ~ ' lines')}}
+</section>
+<section class="panel">
+ <div class="panel-head">
+  <div class="tabs" role="tablist">
+   <a class="{{'active' if not f.flagged}}" href="{{url_with(flagged=None)}}">All operators</a>
+   <a class="{{'active' if f.flagged}}" href="{{url_with(flagged='1')}}">Flagged ({{t.flagged if not f.flagged else operators|length}})</a>
+  </div>
+  <div class="inline-form">{{ui.legend(['productive','policy','operational','operator','undetermined','other'])}}<a class="btn" href="{{url_for('export_operators',**f.query())}}">{{ui.icon('download')}}Export CSV</a></div>
+ </div>
+ {% if sort in BUCKETS %}<div class="panel-foot" style="border-top:0;border-bottom:1px solid var(--line-2)">Sorted by {{BUCKETS[sort][0]|lower}} hours · <a href="{{url_with(sort=None,dir=None)}}">Clear</a></div>{% endif %}
+ <div class="table-wrap limit"><table>
+  <thead><tr>
+   {{ui.sort_th('worker','Operator',sort,dir,False)}}
+   {{ui.sort_th('hours','Paid',sort,dir)}}
+   {{ui.sort_th('utilization','Utilization',sort,dir)}}
+   {{ui.sort_th('pace','Pace',sort,dir)}}
+   {{ui.sort_th('unproductive','Unproductive',sort,dir)}}
+   {% if sort in BUCKETS %}<th class="num">{{BUCKETS[sort][0]}}</th>{% endif %}
+   {{ui.sort_th('cost','Loaded cost',sort,dir)}}
+   {{ui.sort_th('cost_per_line','Cost / line',sort,dir)}}
+   {{ui.sort_th('std_var','Actual vs standard',sort,dir)}}
+   <th style="min-width:150px">Where the cost went</th><th>Flags</th>
+  </tr></thead>
+  <tbody>
+  {% for r in operators %}{% set href=url_for('operator',worker=r.worker,**f.query()) %}
+   <tr class="clickable" data-href="{{href}}" tabindex="0">
+    <td><a class="row-link" href="{{href}}">{{r.worker}}</a><span class="sub">{{r.job}} · {{ui.shift_label(r.shift)}}{{' · Agency' if r.emp=='temporary_agency'}}</span></td>
+    <td class="num">{{r.hours|hours}}</td>
+    <td class="num">{{r.utilization|pct}}</td>
+    <td class="num">{{r.pace|pct}}</td>
+    <td class="num">{{r.h_unproductive|hours}}</td>
+    {% if sort in BUCKETS %}<td class="num">{{r.h_bucket.get(sort,0)|hours}}</td>{% endif %}
+    <td class="num">{{r.cost|usd0}}</td>
+    <td class="num">{{r.cost_per_line|usd}}</td>
+    <td class="num {{'pos' if r.std_var and r.std_var>0 else 'neg' if r.std_var and r.std_var<0}}">{{r.std_var|signed}}</td>
+    <td>{{ui.dist(r.distribution)}}</td>
+    <td>{{ui.flags(r.flags)}}</td>
+   </tr>
+  {% else %}<tr><td colspan="11" class="empty">No operators match these filters. <a href="{{request.path}}">Reset filters</a></td></tr>{% endfor %}
+  </tbody>
+ </table></div>
+ <div class="panel-foot">Actual vs standard compares direct-work cost with standard hours for the lines completed at each operator's straight-time loaded rate. Positive means more costly than standard.</div>
+</section>
+{% endblock %}

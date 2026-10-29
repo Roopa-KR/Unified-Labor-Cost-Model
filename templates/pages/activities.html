@@ -1,0 +1,21 @@
+{% extends 'base.html' %}
+{% block filters %}<form class="filters" method="get">{{ui.period_select(period,periods)}}</form>{% endblock %}
+{% block content %}
+{% set total=activity_rows|sum(attribute='cents') %}
+<section class="panel">
+ <div class="panel-head"><div><h2>Labor cost by work type</h2><p class="muted">All site labor cost by the paid time it was spent on; indirect, waiting and unallocated cost keep their own rows</p></div></div>
+ <div class="table-wrap"><table>
+  <thead><tr><th>Work type</th><th class="num">Allocated cost</th><th class="num">Share</th><th class="num">Lines</th><th class="num">Pieces</th><th class="num">Cost / line</th><th class="num">Direct hours</th><th class="num">Standard hours</th><th class="num">Pace</th></tr></thead>
+  <tbody>{% for r in activity_rows %}{% set w=work.get(r.activity) %}{% set drill=w is not none %}
+   <tr {% if drill %}class="clickable" data-href="{{url_for('activity',activity=r.activity,period=period)}}" tabindex="0"{% endif %}>
+    <td>{% if drill %}<a href="{{url_for('activity',activity=r.activity,period=period)}}">{{r.name}}</a>{% else %}{{r.name|label}}{% endif %}</td>
+    <td class="num">{{r.cents|usd0}}</td><td class="num">{{ui.share(r.cents,total)}}</td>
+    <td class="num">{{r.lines|int if r.lines else '—'}}</td><td class="num">{{r.pieces|int if r.pieces else '—'}}</td><td class="num">{{(r.cost_per_line*100 if r.cost_per_line is not none else none)|usd}}</td>
+    <td class="num">{{w.h_direct|hours if w else '—'}}</td><td class="num">{{w.earned_h|hours if w and w.earned_h else (r.earned_hours|hours if r.earned_hours else '—')}}</td>
+    <td class="num">{% if w and w.pace is not none %}{% if w.pace<0.9 %}<span class="chip warn">{{w.pace|pct}}</span>{% else %}{{w.pace|pct}}{% endif %}{% else %}—{% endif %}</td></tr>
+  {% endfor %}</tbody>
+  <tfoot><tr><td>Total</td><td class="num">{{total|usd0}}</td><td class="num">100%</td><td class="num">{{activity_rows|sum(attribute='lines')|int}}</td><td class="num">{{activity_rows|sum(attribute='pieces')|int}}</td><td></td><td class="num">{{t.h_direct|hours}}</td><td class="num">{{t.earned_h|hours}}</td><td class="num">{{t.pace|pct}}</td></tr></tfoot>
+ </table></div>
+ <div class="panel-foot">Pick work-type cost includes direct and slow-pace time. Standard hours use validated lines-per-hour standards (retrospectively approved); they are not a finance-approved saving.</div>
+</section>
+{% endblock %}

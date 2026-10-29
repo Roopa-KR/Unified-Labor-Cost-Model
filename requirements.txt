@@ -1,0 +1,6 @@
+Flask>=3.1,<4
+openpyxl>=3.1.5,<4
+waitress>=3,<4
+python-dotenv>=1,<2
+plotly>=6,<7
+pytest>=8,<10

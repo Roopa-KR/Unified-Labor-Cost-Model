@@ -1,0 +1,13 @@
+{% extends 'base.html' %}
+{% block crumbs %}<nav class="crumbs" aria-label="Breadcrumb"><a href="{{url_for('view',page='data')}}">Data sources</a><span aria-hidden="true">/</span><span>{{namespace}}</span></nav>{% endblock %}
+{% block badges %}{% if namespace=='supplement' %}<span class="chip tag-synth">Synthesized</span>{% endif %}<span class="chip">{{total|int}} rows</span>{% endblock %}
+{% block content %}
+<section class="panel">
+ <div class="table-wrap limit"><table>
+  <thead><tr><th class="num">Row</th>{% for k in cols %}<th>{{k}}</th>{% endfor %}</tr></thead>
+  <tbody>{% for r in records %}<tr><td class="num muted">{{r.row_no}}</td>{% for k in cols %}{% set v=r.data.get(k) %}<td>{{v if v is not none else '—'}}</td>{% endfor %}</tr>{% else %}<tr><td class="empty">No rows on this page.</td></tr>{% endfor %}</tbody>
+ </table></div>
+ <div class="pager"><span>Rows {{(page_no-1)*100+1}}–{{[page_no*100,total]|min}} of {{total|int}}</span><span class="inline-form">
+  {% if page_no>1 %}<a class="btn" href="?p={{page_no-1}}">{{ui.icon('back')}}Previous</a>{% endif %}{% if page_no*100<total %}<a class="btn" href="?p={{page_no+1}}">Next{{ui.icon('next')}}</a>{% endif %}</span></div>
+</section>
+{% endblock %}

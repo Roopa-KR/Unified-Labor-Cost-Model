@@ -1,0 +1,28 @@
+{% extends 'base.html' %}
+{% block filters %}
+<form class="filters" method="get">
+ {{ui.period_select(period,periods)}}
+ <label>Operator<select name="worker"><option value="">All</option>{% for w in workers %}<option {{'selected' if w==request.args.get('worker')}}>{{w}}</option>{% endfor %}</select></label>
+ <label>Component<select name="component"><option value="">All</option>{% for c_ in components %}<option value="{{c_}}" {{'selected' if c_==request.args.get('component')}}>{{c_|label}}</option>{% endfor %}</select></label>
+ <label>Reference<input type="search" name="q" value="{{request.args.get('q','')}}" placeholder="Search"></label>
+ <button class="primary">Apply</button>{% if request.args %}<a class="reset" href="{{request.path}}">Reset</a>{% endif %}
+</form>{% endblock %}
+{% block content %}
+<section class="panel">
+ <div class="panel-head"><div><h2>{{count|int}} transactions · {{filtered_total|usd}}</h2><p class="muted">One row per source financial record · select a reference for its source row and allocation</p></div>
+  <a class="btn" href="{{url_for('export',period=period,worker=request.args.get('worker',''),component=request.args.get('component',''),q=request.args.get('q',''))}}">{{ui.icon('download')}}Export CSV</a></div>
+ <div class="table-wrap limit"><table>
+  <thead><tr><th>Reference</th><th>Operator</th><th>Component</th><th>Service dates</th><th>Posted</th><th>Status</th><th class="num">Amount</th></tr></thead>
+  <tbody>{% for r in records %}<tr class="clickable" data-href="{{url_for('event',event_id=r.id)}}" tabindex="0">
+   <td><a href="{{url_for('event',event_id=r.id)}}">{{r.id.split(':')[1]}}</a><span class="sub">{{r.source|label}}</span></td>
+   <td>{% if r.worker %}<a href="{{url_for('operator',worker=r.worker,period=period)}}">{{r.worker}}</a>{% else %}—{% endif %}<span class="sub">{{r.center or ''}}</span></td>
+   <td>{{r.component|label}}</td><td>{{r.service_from}} to {{r.service_to}}</td><td>{{(r.posted_at or '')[:10]}}</td>
+   <td>{% if r.status=='disputed' %}<span class="chip warn">Disputed</span>{% else %}{{r.status|label}}{% endif %}{% if r.source_basis!='actual' %} <span class="chip">{{r.source_basis|label}}</span>{% endif %}</td>
+   <td class="num">{{r.cents|usd}}</td></tr>
+  {% else %}<tr><td colspan="7" class="empty">No transactions match. <a href="{{request.path}}">Reset filters</a></td></tr>{% endfor %}</tbody>
+ </table></div>
+ <div class="pager"><span>Page {{page_no}} of {{((count-1)//100+1) if count else 1}}</span><span class="inline-form">
+  {% if page_no>1 %}<a class="btn" href="{{url_with(p=page_no-1)}}">{{ui.icon('back')}}Previous</a>{% endif %}
+  {% if page_no*100<count %}<a class="btn" href="{{url_with(p=page_no+1)}}">Next{{ui.icon('next')}}</a>{% endif %}</span></div>
+</section>
+{% endblock %}

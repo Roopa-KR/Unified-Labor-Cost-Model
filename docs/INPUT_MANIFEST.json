@@ -1,0 +1,38 @@
+[
+  {
+    "id": 1,
+    "filename": "00_GiNi_Foundation.xlsx",
+    "sha256": "10c080e17ece07e67530e77c8fe87a812e449abf630f317b5d9d6c89164bf807",
+    "imported_at": "2026-10-26 18:54:27"
+  },
+  {
+    "id": 2,
+    "filename": "01_GiNi_Raw_Source_Extracts.xlsx",
+    "sha256": "f52a55898b0e46132f849a9a93df08d7e6f26127416dda5e14e0d66d4c0743e5",
+    "imported_at": "2026-10-26 18:54:27"
+  },
+  {
+    "id": 3,
+    "filename": "02_P1_Labor_Ledger_TierA_Operational.xlsx",
+    "sha256": "8574d2754e1ca048be79b49675c88ebe49a78b8033456ad54adcdfd8b8e68b77",
+    "imported_at": "2026-10-26 18:55:14"
+  },
+  {
+    "id": 4,
+    "filename": "03_P1_Labor_Ledger_TierB_Financial.xlsx",
+    "sha256": "d0f62f5162b786c2f40ca9843381d2b05aad4729a66108e5e82d023518593ba3",
+    "imported_at": "2026-10-26 18:56:26"
+  },
+  {
+    "id": 5,
+    "filename": "04_P2_Cost_Intelligence.xlsx",
+    "sha256": "72b160a2e8ca79ce5c6995c4cd7cee102482eb8d6c7c73f1840c36e4ddbea097",
+    "imported_at": "2026-10-26 18:56:30"
+  },
+  {
+    "id": 6,
+    "filename": "08_Platform_Copilot_Integration.xlsx",
+    "sha256": "fae34f383d27ffc1fa6716adefb7e59ec4578766384f5b6fcbabd0723a9eb4ed",
+    "imported_at": "2026-10-26 18:57:01"
+  }
+]

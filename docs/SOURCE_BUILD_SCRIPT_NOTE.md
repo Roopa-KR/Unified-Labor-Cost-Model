@@ -1,0 +1,1 @@
+The supplied Build_Scripts/common.py sets SRC to /home/claude/src_zip/gini_synth_v2 and reads CSVs there. Those CSV inputs are not included in this ZIP. The Flask importer uses the supplied workbooks directly.

@@ -1,0 +1,86 @@
+{% extends 'base.html' %}
+{% block crumbs %}<nav class="crumbs" aria-label="Breadcrumb"><a href="{{url_for('view',page='operators',**f.query())}}">Operators</a><span aria-hidden="true">/</span><span>{{worker}}</span></nav>{% endblock %}
+{% block badges %}<span class="chip">{{info.job}}</span><span class="chip">{{ui.shift_label(info.shift)}} shift</span><span class="chip {{'info' if info.emp=='temporary_agency'}}">{{ui.emp_label(info.emp)}}</span>{{ui.flags(m.flags)}}{% endblock %}
+{% block filters %}{{ui.op_filters(f,period,periods,extra=False)}}{% endblock %}
+{% block content %}
+<section class="kpis">
+ {{ui.kpi('Loaded labor cost', m.cost|usd, m.days ~ ' shifts · ' ~ f.start[5:] ~ ' to ' ~ f.end[5:], lead=True)}}
+ {{ui.kpi('Paid hours', m.hours|hours, (m.h_tier.get('OT',0)+m.h_tier.get('DT',0))|hours ~ ' overtime')}}
+ {{ui.kpi('Productive', m.h_productive|hours, (m.utilization|pct) ~ ' utilization · ' ~ (m.cost_productive|usd0))}}
+ {{ui.kpi('Unproductive', m.h_unproductive|hours, m.cost_unproductive|usd0)}}
+ {{ui.kpi('Pace vs standard', m.pace|pct, m.earned_h|hours ~ ' standard')}}
+ {{ui.kpi('Cost per line', m.cost_per_line|usd, m.lines|int ~ ' lines · ' ~ (m.cost_per_order|usd) ~ ' per order')}}
+ {{ui.kpi('Actual vs standard', m.std_var|signed, 'Direct ' ~ (m.cost_direct|usd0) ~ ' vs standard ' ~ (m.std_cost|usd0))}}
+</section>
+
+<div class="grid">
+ <section class="panel span-7">
+  <div class="panel-head"><div><h2>Where the cost went</h2><p class="muted">Loaded cost distributed by paid time at the applicable hourly rate</p></div></div>
+  <div class="panel-body">{{ui.dist(m.distribution,'lg')}}<div style="margin-top:10px">{{ui.legend()}}</div></div>
+  <div class="table-wrap"><table>
+   <thead><tr><th>Category</th><th>Control</th><th class="num">Hours</th><th class="num">Cost</th><th class="num">Share</th><th class="num">Loaded rate</th></tr></thead>
+   <tbody>{% for b in buckets %}<tr><td><i class="swatch" style="background:{{b.color}}"></i>{{b.label}}</td><td class="nowrap"><span class="muted">{{b.control_label}}</span></td>
+    <td class="num">{{b.hours|hours if b.hours else '—'}}</td><td class="num">{{b.cents|usd}}</td><td class="num">{{'%.1f'|format(b.share*100)}}%</td><td class="num">{{b.rate|rate}}</td></tr>{% endfor %}</tbody>
+   <tfoot><tr><td colspan="2">Total</td><td class="num">{{m.hours|hours}}</td><td class="num">{{(buckets|sum(attribute='cents'))|usd}}</td><td class="num">100%</td><td class="num">{{m.loaded_rate|rate}}</td></tr></tfoot>
+  </table></div>
+  <div class="panel-foot">{% if (buckets|sum(attribute='cents'))==m.cost %}<span class="chip good">{{ui.icon('check')}}Reconciles to loaded cost</span>{% else %}<span class="chip bad">{{ui.icon('alert')}}Does not reconcile</span>{% endif %}<span>Unpaid meals: {{m.meal_h|hours}} (no cost)</span></div>
+ </section>
+
+ <section class="panel span-5">
+  <div class="panel-head"><div><h2>Loaded wage build-up</h2><p class="muted">Posted payroll, employer costs and agency billing</p></div></div>
+  <div class="table-wrap"><table>
+   <thead><tr><th>Component</th><th class="num">Amount</th><th class="num">Per paid hour</th></tr></thead>
+   <tbody>{% for g in build.groups %}<tr><td>{{g.label}}</td><td class="num">{{g.cents|usd}}</td><td class="num">{{g.per_hour|rate}}</td></tr>{% endfor %}</tbody>
+   <tfoot><tr><td>Total loaded cost</td><td class="num">{{m.cost|usd}}</td><td class="num">{{(m.cost/m.hours if m.hours else none)|rate}}</td></tr></tfoot>
+  </table></div>
+  <div class="table-wrap" style="border-top:1px solid var(--line)"><table>
+   <thead><tr><th>Applicable rate</th><th class="num">Hours</th><th class="num">Loaded rate</th><th class="num">Cost</th></tr></thead>
+   <tbody>{% for r in build.tiers %}<tr><td>{{r.label}}</td><td class="num">{{r.hours|hours if r.hours else '—'}}</td><td class="num">{{r.rate|rate}}</td><td class="num">{{r.cents|usd}}</td></tr>{% endfor %}</tbody>
+  </table></div>
+  <div class="panel-foot" style="flex-direction:column;align-items:flex-start;gap:6px">
+   {% if build.base_rate %}<span>Base pay rate {{'$%.2f/h'|format(build.base_rate)}} · overtime adds the premium on overtime hours only</span>{% elif build.bill_rate %}<span>Agency bill rate {{'$%.2f/h'|format(build.bill_rate)}}, includes agency burden</span>{% endif %}
+   {% if ot.comparable %}<span>Overtime check: timeclock {{ot.calculated|hours}} vs payroll {{ot.posted|hours}}
+    {% if (ot.difference|abs)<0.05 %}<span class="chip good">{{ui.icon('check')}}Matches</span>{% else %}<span class="chip warn">{{ui.icon('alert')}}{{'%+.1f'|format(ot.difference)}} h to review</span>{% endif %}</span>{% endif %}
+  </div>
+ </section>
+
+ <section class="panel span-12">
+  <div class="panel-head"><div><h2>Pace and standard cost by work type</h2><p class="muted">Standard cost = standard hours for lines completed × straight-time loaded rate {{m.st_rate|rate}}</p></div></div>
+  <div class="table-wrap"><table>
+   <thead><tr><th>Work type</th><th class="num">Lines</th><th class="num">Pieces</th><th class="num">Direct hours</th><th class="num">Standard hours</th><th class="num">Pace</th><th class="num">Slow-pace</th><th class="num">Not performed</th><th class="num">Direct cost</th><th class="num">Standard cost</th><th class="num">Variance</th><th class="num">Cost / line</th></tr></thead>
+   <tbody>{% for act,a in acts %}<tr class="clickable" data-href="{{url_for('activity',activity=act,**f.query())}}" tabindex="0">
+    <td><a href="{{url_for('activity',activity=act,**f.query())}}">{{names.get(act,act)}}</a></td><td class="num">{{a.lines|int}}</td><td class="num">{{a.pieces|int}}</td>
+    <td class="num">{{a.h_direct|hours}}</td><td class="num">{{a.earned_h|hours}}</td>
+    <td class="num">{% if a.pace is not none and a.pace*100<90 %}<span class="chip warn">{{a.pace|pct}}</span>{% else %}{{a.pace|pct}}{% endif %}</td>
+    <td class="num">{{a.h_pace|hours if a.h_pace>=0.05 else '—'}}</td><td class="num">{{a.h_not|hours if a.h_not>=0.05 else '—'}}</td>
+    <td class="num">{{a.cost_direct|usd}}</td><td class="num">{{a.std_cost|usd}}</td><td class="num {{'pos' if a.variance and a.variance>0 else 'neg' if a.variance and a.variance<0}}">{{a.variance|signed}}</td><td class="num">{{a.cost_per_line|usd}}</td></tr>
+   {% else %}<tr><td colspan="12" class="empty">No direct work in this range.</td></tr>{% endfor %}</tbody>
+   {% if acts %}<tfoot><tr><td>Total</td><td class="num">{{m.lines|int}}</td><td class="num">{{m.pieces|int}}</td><td class="num">{{m.h_direct|hours}}</td><td class="num">{{m.earned_h|hours}}</td><td class="num">{{m.pace|pct}}</td><td class="num">{{m.h_bucket.get('pace_loss',0)|hours}}</td><td class="num">{{m.h_bucket.get('not_performed',0)|hours}}</td><td class="num">{{m.cost_direct|usd}}</td><td class="num">{{m.std_cost|usd}}</td><td class="num">{{m.std_var|signed}}</td><td class="num">{{m.direct_per_line|usd}}</td></tr></tfoot>{% endif %}
+  </table></div>
+  {% if m.std_var is not none %}<div class="panel-foot">Variance {{m.std_var|signed}} = pace {{m.eff_var|signed}} (direct hours vs standard hours) + overtime and rate mix {{m.rate_var|signed}}. Wages are never adjusted for pace.</div>{% endif %}
+ </section>
+
+ <section class="panel span-12">
+  <div class="panel-head"><div><h2>Shifts</h2><p class="muted">Select a shift for its timeline, activities and orders</p></div><a class="btn" href="{{url_for('export_operator',worker=worker,**f.query())}}">{{ui.icon('download')}}Export CSV</a></div>
+  <div class="table-wrap"><table>
+   <thead><tr><th>Date</th><th>Shift</th><th>Work types</th><th class="num">Paid</th><th class="num">Productive</th><th class="num">Unproductive</th><th class="num">Overtime</th><th class="num">Lines</th><th class="num">Pace</th><th class="num">Cost</th><th style="min-width:140px">Where the cost went</th></tr></thead>
+   <tbody>{% for d in days %}{% set href=url_for('operator_day',worker=worker,day=d.day) %}<tr class="clickable" data-href="{{href}}" tabindex="0">
+    <td class="nowrap"><a class="row-link" href="{{href}}">{{d.day}}</a></td><td>{{ui.shift_label(d.shift)}}</td><td class="wrap"><span class="muted">{{d.activities or '—'}}</span></td>
+    <td class="num">{{d.hours|hours}}</td><td class="num">{{d.h_prod|hours}}</td><td class="num">{{d.h_unprod|hours}}</td><td class="num">{{d.ot_h|hours if d.ot_h>0.005 else '—'}}</td>
+    <td class="num">{{d.lines|int}}</td><td class="num">{{d.pace|pct}}</td><td class="num">{{d.cost|usd}}</td><td>{{ui.dist(d.distribution)}}</td></tr>
+   {% else %}<tr><td colspan="11" class="empty">No paid shifts in this range.</td></tr>{% endfor %}</tbody>
+  </table></div>
+  {% if m.cost_tier.get('NA') %}<div class="panel-foot">Not in shift totals: {{m.cost_tier.get('NA')|usd}} of paid leave and non-time charges.</div>{% endif %}
+ </section>
+
+ {% if is_finance and events %}
+ <section class="panel span-12">
+  <details><summary class="panel-head" style="cursor:pointer"><div><h2>Source transactions</h2><p class="muted">{{events|length}} payroll, employer-cost and agency records behind this operator</p></div></summary>
+  <div class="table-wrap"><table>
+   <thead><tr><th>Reference</th><th>Component</th><th>Period</th><th>Service dates</th><th class="num">Amount</th></tr></thead>
+   <tbody>{% for r in events %}<tr><td><a href="{{url_for('event',event_id=r.id)}}">{{r.id}}</a></td><td>{{r.component|label}}</td><td>{{r.period|replace('prd-','')}}</td><td>{{r.service_from}} to {{r.service_to}}</td><td class="num">{{r.cents|usd}}</td></tr>{% endfor %}</tbody>
+  </table></div></details>
+ </section>
+ {% endif %}
+</div>
+{% endblock %}

@@ -1,0 +1,21 @@
+{% extends 'base.html' %}
+{% block filters %}<form class="filters" method="get">{{ui.period_select(period,periods)}}</form>{% endblock %}
+{% block content %}
+{% set labor=customer_rows|sum(attribute='labor_cents') %}{% set billed=customer_rows|sum(attribute='billed_cents') %}{% set lines=customer_rows|sum(attribute='lines') %}
+<section class="kpis">
+ {{ui.kpi('Attributed labor', labor|usd0, ((labor/s.total_cents) if s.total_cents else none)|pct ~ ' of site labor', lead=True)}}
+ {{ui.kpi('Posted billing', billed|usd0)}}
+ {{ui.kpi('Partial labor contribution', (billed-labor)|usd0, 'Billing minus attributed labor')}}
+ {{ui.kpi('Labor per line', (labor/lines if lines else none)|usd, lines|int ~ ' lines')}}
+ {{ui.kpi('Not attributed', unassigned|usd0, 'Indirect, waiting and site costs')}}
+</section>
+<section class="panel">
+ <div class="panel-head"><div><h2>Customers</h2><p class="muted">Activity cost shared by completed lines; not net profit — overhead, penalties and unattributed labor are excluded</p></div></div>
+ <div class="table-wrap"><table>
+  <thead><tr><th>Customer</th><th class="num">Lines</th><th class="num">Attributed labor</th><th class="num">Labor per line</th><th class="num">Posted billing</th><th class="num">Partial contribution</th><th class="num">Labor % of billing</th></tr></thead>
+  <tbody>{% for r in customer_rows|sort(attribute='labor_cents',reverse=True) %}<tr><td>{{r.name}}</td><td class="num">{{r.lines|int}}</td><td class="num">{{r.labor_cents|usd0}}</td><td class="num">{{(r.labor_cents/r.lines if r.lines else none)|usd}}</td><td class="num">{{r.billed_cents|usd0}}</td>
+   <td class="num {{'pos' if r.contribution_cents<0}}">{{r.contribution_cents|usd0}}</td><td class="num">{% set p=(r.labor_cents/r.billed_cents if r.billed_cents else none) %}{% if p is not none and p>0.6 %}<span class="chip warn">{{p|pct}}</span>{% else %}{{p|pct}}{% endif %}</td></tr>{% endfor %}</tbody>
+  <tfoot><tr><td>Total</td><td class="num">{{lines|int}}</td><td class="num">{{labor|usd0}}</td><td class="num">{{(labor/lines if lines else none)|usd}}</td><td class="num">{{billed|usd0}}</td><td class="num">{{(billed-labor)|usd0}}</td><td class="num">{{(labor/billed if billed else none)|pct}}</td></tr></tfoot>
+ </table></div>
+</section>
+{% endblock %}

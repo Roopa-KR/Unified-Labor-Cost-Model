@@ -1,0 +1,29 @@
+{% extends 'base.html' %}
+{% block crumbs %}<nav class="crumbs" aria-label="Breadcrumb"><a href="{{url_for('view',page='ledger')}}">Ledger</a><span aria-hidden="true">/</span><span>{{event.id}}</span></nav>{% endblock %}
+{% block heading %}{{event.component|label}} · {{event.cents|usd}}{% endblock %}
+{% block badges %}{% if event.status=='disputed' %}<span class="chip warn">Disputed</span>{% endif %}{% if event.worker %}<a class="chip info" href="{{url_for('operator',worker=event.worker)}}">{{event.worker}}</a>{% endif %}{% endblock %}
+{% block content %}
+<section class="kpis">
+ {{ui.kpi('Amount', event.cents|usd, event.source|label, lead=True)}}
+ {{ui.kpi('Period', event.period|replace('prd-',''), event.service_from ~ ' to ' ~ event.service_to)}}
+ {{ui.kpi('Allocated', allocations|sum(attribute='cents')|usd, allocations|length ~ ' allocation rows')}}
+ {{ui.kpi('Basis', event.source_basis|label, 'Posted ' ~ (event.posted_at or '')[:10])}}
+</section>
+<div class="grid">
+ <section class="panel span-5">
+  <div class="panel-head"><div><h2>Original source row</h2><p class="muted">{{raw.filename}} · {{raw.sheet}} · row {{raw.row_no}}</p></div></div>
+  <div class="table-wrap"><table><tbody>{% for k,v in payload.items() %}<tr><td class="muted">{{k}}</td><td>{{v if v is not none else '—'}}</td></tr>{% endfor %}</tbody></table></div>
+  <div class="panel-foot" title="{{raw.sha256}}">SHA-256 {{raw.sha256[:24]}}…</div>
+ </section>
+ <section class="panel span-7">
+  <div class="panel-head"><div><h2>Where this amount went</h2><p class="muted">Exact-cent allocation to the operator's paid time; premiums go to overtime hours</p></div></div>
+  <div class="table-wrap"><table><thead><tr><th>Category</th><th>Control</th><th>Rate</th><th class="num">Amount</th></tr></thead>
+   <tbody>{% for b in by_bucket %}<tr><td><i class="swatch" style="background:{{CONTROLS[b.control][1]}}"></i>{{BUCKETS[b.bucket][0] if b.bucket in BUCKETS else b.bucket}}</td><td class="muted">{{CONTROLS[b.control][0]}}</td><td>{{ {'ST':'Straight time','OT':'Overtime','DT':'Double time','NA':'Not time-based'}.get(b.tier,b.tier) }}</td><td class="num">{{b.cents|usd}}</td></tr>{% endfor %}</tbody>
+   <tfoot><tr><td colspan="3">Total</td><td class="num">{{by_bucket|sum(attribute='cents')|usd}}</td></tr></tfoot></table></div>
+  <details><summary class="panel-foot" style="cursor:pointer">All {{allocations|length}} allocation rows (day × work type × category × rate)</summary>
+   <div class="table-wrap limit"><table><thead><tr><th>Day</th><th>Work type</th><th>Category</th><th>Rate</th><th class="num">Driver seconds</th><th class="num">Amount</th><th>Method</th></tr></thead>
+    <tbody>{% for a in allocations %}<tr><td>{{a.day}}</td><td>{{a.activity|label}}</td><td>{{a.bucket|label}}</td><td>{{a.tier}}</td><td class="num">{{'%.0f'|format(a.seconds)}}</td><td class="num">{{a.cents|usd}}</td><td class="muted">{{a.method}}</td></tr>{% endfor %}</tbody></table></div>
+   <div class="panel-foot">Driver seconds repeat for each financial component; do not add them up as paid hours.</div></details>
+ </section>
+</div>
+{% endblock %}

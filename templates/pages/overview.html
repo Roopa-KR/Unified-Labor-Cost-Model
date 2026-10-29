@@ -1,0 +1,62 @@
+{% extends 'base.html' %}
+{% block filters %}<form class="filters" method="get">{{ui.period_select(period,periods)}}</form>{% endblock %}
+{% block content %}
+{% set budget_var = budget.actual_cents - budget.budget_cents %}
+{% set open_checks = checks|selectattr('difference_cents','ne',0)|list %}
+<section class="kpis">
+ {{ui.kpi('Loaded labor cost', t.cost|usd0, t.operators ~ ' operators · ' ~ t.hours|int ~ ' paid hours', lead=True)}}
+ {{ui.kpi('Productive cost', t.cost_productive|usd0, ((t.cost_productive/t.cost) if t.cost else none)|pct ~ ' of loaded cost')}}
+ {{ui.kpi('Unproductive time cost', t.cost_unproductive|usd0, (t.cost_control.get('operator',0))|usd0 ~ ' operator-controlled', href=url_for('view',page='allocation',period=period))}}
+ {{ui.kpi('Cost per line', t.cost_per_line|usd, 'Standard ' ~ ((std/t.lines if t.lines else none)|usd) ~ ' direct')}}
+ {{ui.kpi('Actual vs standard', (t.cost_direct-std)|signed, 'Direct work, completed lines', href=url_for('view',page='operators',sort='std_var',period=period) if can_drill else None)}}
+ {{ui.kpi('Budget variance', budget_var|signed, 'vs ' ~ budget.version, href=url_for('view',page='variance',period=period))}}
+</section>
+
+<div class="grid">
+ <section class="panel span-7">
+  <div class="panel-head"><div><h2>Standard cost to actual cost</h2><p class="muted">What the completed lines should have cost, and what added to it</p></div><a href="{{url_for('view',page='allocation',period=period)}}">Allocation detail</a></div>
+  <div class="panel-body"><div id="bridge" class="chart tall"></div></div>
+ </section>
+ <section class="panel span-5">
+  <div class="panel-head"><div><h2>Loaded cost composition</h2><p class="muted">Posted payroll, employer costs and agency billing</p></div></div>
+  <div class="table-wrap"><table>
+   <tbody>{% for g in groups %}<tr><td>{{g.label}}</td><td class="num">{{g.cents|usd0}}</td><td class="num" style="width:120px">{{ui.share(g.cents,t.cost,'#2a78d6')}}</td></tr>{% endfor %}</tbody>
+   <tfoot><tr><td>Total</td><td class="num">{{t.cost|usd0}}</td><td></td></tr></tfoot>
+  </table></div>
+  <div class="panel-foot">{% for p in s.trend %}<span>{{p.period|replace('prd-','')}}: <b>{{p.cents|usd0}}</b></span>{% endfor %}{% if is_finance %}<a href="{{url_for('view',page='ledger',period=period)}}">Open ledger</a>{% endif %}</div>
+ </section>
+
+ <section class="panel span-7">
+  <div class="panel-head"><div><h2>Unproductive cost by cause</h2><p class="muted">Paid time that produced no output, at the operator's applicable loaded rate</p></div>{{ui.legend(['policy','operational','operator','undetermined'])}}</div>
+  <div class="table-wrap"><table>
+   <thead><tr><th>Cause</th><th>Control</th><th class="num">Hours</th><th class="num">Cost</th><th class="num">Share of loaded cost</th></tr></thead>
+   <tbody>{% for b in buckets if b.control not in ('productive','other') and (b.hours>=0.05 or b.cents>=1000) %}<tr {% if can_drill and b.hours %}class="clickable" data-href="{{url_for('view',page='operators',sort=b.bucket,period=period)}}" tabindex="0"{% endif %}>
+    <td><i class="swatch" style="background:{{b.color}}"></i>{% if can_drill and b.hours %}<a href="{{url_for('view',page='operators',sort=b.bucket,period=period)}}">{{b.label}}</a>{% else %}{{b.label}}{% endif %}</td>
+    <td class="muted nowrap">{{b.control_label}}</td><td class="num">{{b.hours|hours if b.hours else '—'}}</td><td class="num">{{b.cents|usd0}}</td><td class="num" style="width:140px">{{ui.share(b.cents,t.cost,b.color)}}</td></tr>{% endfor %}</tbody>
+   <tfoot><tr><td colspan="2">Unproductive total</td><td class="num">{{(t.hours-t.h_productive)|hours}}</td><td class="num">{{t.cost_unproductive|usd0}}</td><td class="num">{{((t.cost_unproductive/t.cost) if t.cost else none)|pct}}</td></tr></tfoot>
+  </table></div>
+ </section>
+ <section class="panel span-5">
+  <div class="panel-head"><h2>Needs review</h2></div>
+  <ul class="list">
+   <li><span class="what">{% if open_checks %}<span class="chip warn">{{ui.icon('alert')}}{{open_checks|length}}</span>{% else %}<span class="chip good">{{ui.icon('check')}}0</span>{% endif %}<a href="{{url_for('view',page='reconciliation',period=period)}}">Reconciliation differences</a></span><span class="muted">{{checks|length}} controls</span></li>
+   {% if is_finance %}<li><span class="what"><span class="chip {{'warn' if disputes else 'good'}}">{{disputes|length}}</span><a href="{{url_for('view',page='exceptions',period=period)}}#disputes">Disputed agency invoices in expense</a></span><span class="num">{{disputes|sum(attribute='cents')|usd0}}</span></li>{% endif %}
+   <li><span class="what"><span class="chip">{{(t.h_bucket.get('unattributed',0))|hours}}</span>{% if can_drill %}<a href="{{url_for('view',page='operators',sort='unattributed',period=period)}}">Unaccounted paid time</a>{% else %}Unaccounted paid time{% endif %}</span><span class="num">{{t.cost_bucket.get('unattributed',0)|usd0}}</span></li>
+   <li><span class="what"><span class="chip">{{(t.h_bucket.get('pace_loss',0))|hours}}</span>Slow-pace time, cause not established</span><span class="num">{{t.cost_bucket.get('pace_loss',0)|usd0}}</span></li>
+   {% if t.cost_bucket.get('wait_equipment') %}<li><span class="what"><span class="chip tag-synth">Synthesized</span>Equipment waiting uses a generated log</span><a href="{{url_for('view',page='settings')}}">Policy</a></li>{% endif %}
+   <li><span class="what"><span class="chip">0</span>Realized savings claimed</span><span class="muted">Needs an approved baseline</span></li>
+  </ul>
+ </section>
+</div>
+{% endblock %}
+{% block scripts %}
+<script>
+const B={{cost_bridge|tojson}};
+GINI.plot('bridge',[{type:'waterfall',orientation:'h',y:B.map(b=>b.label),x:B.map(b=>b.cents/100),measure:B.map(b=>b.measure),
+ connector:{line:{color:'#c9ced4',width:1}},increasing:{marker:{color:'#eb6834'}},decreasing:{marker:{color:'#1baf7a'}},totals:{marker:{color:'#2a78d6'}},
+ text:B.map(b=>(b.measure==='relative'&&b.cents>0?'+':'')+GINI.money(b.cents/100)),textposition:'outside',cliponaxis:false,textfont:{size:11,color:'#4a5562'},
+ hovertemplate:'%{y}<br>%{text}<extra></extra>'}],
+ {margin:{t:8,r:70,b:30,l:232},xaxis:{tickprefix:'$',tickformat:',.0f',range:[0,Math.max(...B.map(b=>b.cents/100))*1.12]},yaxis:{autorange:'reversed',gridcolor:'rgba(0,0,0,0)',tickfont:{size:12,color:'#4a5562'}}},
+ ()=>location.href='{{url_for('view',page='allocation',period=period)}}');
+</script>
+{% endblock %}

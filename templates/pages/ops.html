@@ -1,0 +1,58 @@
+{% extends 'base.html' %}
+{% block filters %}{{ui.op_filters(f,period,periods)}}{% endblock %}
+{% block content %}
+{% set unprod = t.hours - t.h_productive %}
+<section class="kpis" aria-label="Key figures">
+ {{ui.kpi('Paid hours', t.hours|hours, t.operators ~ ' operators · ' ~ f.start[5:] ~ ' to ' ~ f.end[5:], lead=True)}}
+ {{ui.kpi('Utilization', t.utilization|pct, t.h_productive|hours ~ ' productive')}}
+ {{ui.kpi('Pace vs standard', t.pace|pct, t.earned_h|hours ~ ' standard of ' ~ t.h_direct|hours ~ ' direct')}}
+ {{ui.kpi('Unproductive hours', unprod|hours, (t.h_control.get('operator',0))|hours ~ ' operator-controlled')}}
+ {{ui.kpi('Lines completed', t.lines|int, (t.cost_per_line|usd) ~ ' loaded cost per line')}}
+ {{ui.kpi('Operators flagged', t.flagged, 'of ' ~ t.operators, href=(url_for('view',page='operators',flagged=1,period=period) if can_drill else None))}}
+</section>
+
+<div class="grid">
+ <section class="panel span-8">
+  <div class="panel-head"><div><h2>Paid hours by day</h2><p class="muted">Every paid hour, split by who controls it{{'. Select a day to see its operators.' if can_drill}}</p></div>{{ui.legend(['productive','policy','operational','operator','undetermined'])}}</div>
+  <div class="panel-body"><div id="daily" class="chart"></div></div>
+ </section>
+ <section class="panel span-4">
+  <div class="panel-head"><div><h2>Unproductive time by cause</h2><p class="muted">Hours · share of paid time</p></div></div>
+  <ul class="list">
+  {% for b in buckets if b.control not in ('productive','other') and b.hours>=0.05 %}
+   <li><span class="what"><i class="swatch" style="background:{{b.color}}"></i>{% if can_drill %}<a href="{{url_for('view',page='operators',sort=b.bucket,period=period)}}">{{b.label}}</a>{% else %}{{b.label}}{% endif %}</span><span class="num">{{b.hours|hours}} <small>· {{'%.1f'|format(b.hours/t.hours*100 if t.hours else 0)}}%</small></span></li>
+  {% else %}<li class="empty">No unproductive time in this range.</li>{% endfor %}
+  </ul>
+ </section>
+
+ {% if can_drill %}
+ <section class="panel span-7">
+  <div class="panel-head"><div><h2>Needs attention</h2><p class="muted">Operators outside the thresholds set in Cost policy</p></div><a href="{{url_for('view',page='operators',flagged=1,period=period)}}">All flagged</a></div>
+  {% if attention %}<div class="table-wrap"><table>
+   <thead><tr><th>Operator</th><th>Reason</th><th class="num">Utilization</th><th class="num">Pace</th><th class="num">Unproductive</th></tr></thead>
+   <tbody>{% for r in attention %}<tr class="clickable" data-href="{{url_for('operator',worker=r.worker,**f.query())}}" tabindex="0">
+    <td><a class="row-link" href="{{url_for('operator',worker=r.worker,**f.query())}}">{{r.worker}}</a><span class="sub">{{r.job}} · {{ui.shift_label(r.shift)}}</span></td>
+    <td>{{ui.flags(r.flags)}}</td><td class="num">{{r.utilization|pct}}</td><td class="num">{{r.pace|pct}}</td><td class="num">{{r.h_unproductive|hours}}</td></tr>{% endfor %}</tbody>
+  </table></div>{% else %}<p class="empty">No operators outside thresholds.</p>{% endif %}
+ </section>
+ {% endif %}
+ <section class="panel {{'span-5' if can_drill else 'span-12'}}">
+  <div class="panel-head"><div><h2>Work types</h2><p class="muted">Pace is standard hours earned ÷ direct hours</p></div><a href="{{url_for('view',page='activities',period=period)}}">Details</a></div>
+  <div class="table-wrap"><table>
+   <thead><tr><th>Work type</th><th class="num">Lines</th><th class="num">Direct</th><th class="num">Pace</th></tr></thead>
+   <tbody>{% for r in work %}<tr class="clickable" data-href="{{url_for('activity',activity=r.activity,**f.query())}}" tabindex="0"><td><a href="{{url_for('activity',activity=r.activity,**f.query())}}">{{r.name}}</a></td><td class="num">{{r.lines|int}}</td><td class="num">{{r.h_direct|hours}}</td>
+    <td class="num">{% if r.pace is not none and r.pace<0.9 %}<span class="chip warn">{{r.pace|pct}}</span>{% else %}{{r.pace|pct}}{% endif %}</td></tr>{% endfor %}</tbody>
+  </table></div>
+ </section>
+</div>
+{% endblock %}
+{% block scripts %}
+<script>
+const daily={{daily|tojson}};const C=GINI.controls;
+const keys=['productive','policy','operational','operator','undetermined'];
+GINI.plot('daily',keys.map(k=>({type:'bar',name:C[k][0],x:daily.map(d=>d.day),y:daily.map(d=>d[k]),marker:{color:C[k][1],line:{color:'#fff',width:1}},
+ hovertemplate:'%{x|%a %b %d}<br>'+C[k][0]+': %{y:.1f} h<extra></extra>'})),
+ {barmode:'stack',bargap:.35,xaxis:{type:'date',tickformat:'%a %d',dtick:86400000},yaxis:{ticksuffix:' h'}},
+ {{can_drill|tojson}}?p=>location.href={{url_for('view',page='operators')|tojson}}+'?from='+p.x.slice(0,10)+'&to='+p.x.slice(0,10):null);
+</script>
+{% endblock %}

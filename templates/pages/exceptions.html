@@ -1,0 +1,51 @@
+{% extends 'base.html' %}
+{% block filters %}{{ui.op_filters(f,period,periods,extra=False)}}{% endblock %}
+{% block content %}
+<section class="kpis">
+ {{ui.kpi('Operator-controlled', t.h_control.get('operator',0)|hours, t.cost_control.get('operator',0)|usd0, lead=True)}}
+ {{ui.kpi('Operational delays', t.h_control.get('operational',0)|hours, t.cost_control.get('operational',0)|usd0)}}
+ {{ui.kpi('Cause not established', (t.h_control.get('undetermined',0))|hours, 'Includes ' ~ t.h_bucket.get('pace_loss',0)|hours ~ ' slow-pace')}}
+ {{ui.kpi('Open source exceptions', source_exceptions|sum(attribute='open')|int, source_exceptions|sum(attribute='n')|int ~ ' recorded')}}
+ {% if is_finance %}{{ui.kpi('Disputed invoices', disputes|length, disputes|sum(attribute='cents')|usd0)}}{% endif %}
+</section>
+<div class="callout">{{ui.icon('info')}}<span>These are observations to review, not findings of misconduct. Operational delays and time with no established cause are not counted as operator inefficiency.</span></div>
+<div class="grid">
+ <section class="panel span-7">
+  <div class="panel-head"><div><h2>Operator shifts to review</h2><p class="muted">10 minutes or more in one category on one shift · slow-pace time is reviewed on operator pages</p></div></div>
+  <div class="table-wrap limit"><table>
+   <thead><tr><th>Operator</th><th>Date</th><th>Category</th><th>Control</th><th class="num">Time</th></tr></thead>
+   <tbody>{% for r in issues %}{% set href=url_for('operator_day',worker=r.worker,day=r.day) %}<tr class="clickable" data-href="{{href}}" tabindex="0"><td><a class="row-link" href="{{url_for('operator',worker=r.worker,**f.query())}}">{{r.worker}}</a></td><td><a href="{{href}}">{{r.day}}</a></td>
+    <td><i class="swatch" style="background:{{CONTROLS[r.control][1]}}"></i>{{BUCKETS[r.bucket][0]}}</td><td class="muted">{{CONTROLS[r.control][0]}}</td><td class="num">{{'%.0f min'|format(r.seconds/60)}}</td></tr>
+   {% else %}<tr><td colspan="5" class="empty">Nothing to review in this range.</td></tr>{% endfor %}</tbody>
+  </table></div>
+ </section>
+ <section class="panel span-5">
+  <div class="panel-head"><div><h2>Recorded operational exceptions</h2><p class="muted">From the WMS and device feeds, all dates</p></div></div>
+  <div class="table-wrap"><table>
+   <thead><tr><th>Exception</th><th class="num">Count</th><th class="num">Open</th><th class="num">Time</th></tr></thead>
+   <tbody>{% for r in source_exceptions %}<tr><td>{{r.type|label}}</td><td class="num">{{r.n|int}}</td><td class="num">{{r.open|int}}</td><td class="num">{{((r.seconds or 0)/3600)|hours}}</td></tr>{% endfor %}</tbody>
+  </table></div>
+  {% if is_finance %}<div class="panel-foot"><a href="{{url_for('source',namespace='operations',sheet='operational_exception')}}">Source rows</a></div>{% endif %}
+ </section>
+</div>
+{% if is_finance %}
+<section class="panel" id="disputes">
+ <div class="panel-head"><div><h2>Disputed agency invoices</h2><p class="muted">Posted, so included in recorded expense · review notes never change amounts</p></div></div>
+ {% for r in disputes %}{% set case=cases.get(r.id,{}) %}
+ <div class="panel-body" style="border-bottom:1px solid var(--line-2)">
+  <div class="inline-form" style="justify-content:space-between"><span><a class="row-link" href="{{url_for('event',event_id=r.id)}}">{{r.id.split(':')[1]}}</a> · {{r.worker}} · {{r.service_from}} to {{r.service_to}}</span><b>{{r.cents|usd}}</b></div>
+  <form action="/investigate" method="post" class="inline-form" style="margin-top:10px"><input type="hidden" name="csrf" value="{{session.csrf}}"><input type="hidden" name="key" value="{{r.id}}">
+   <select name="status" aria-label="Review status">{% for st in ['Open','In review','Resolved'] %}<option {{'selected' if case.get('status')==st}}>{{st}}</option>{% endfor %}</select>
+   <input name="note" placeholder="Evidence or next action" value="{{case.get('note','')}}" style="flex:1;min-width:240px" aria-label="Note"><button>Save review</button>
+   {% if case.get('updated_at') %}<span class="muted">Updated {{case.updated_at[:16]}}</span>{% endif %}</form>
+ </div>
+ {% else %}<p class="empty">No disputed invoices in this period.</p>{% endfor %}
+</section>
+<section class="panel">
+ <details><summary class="panel-head" style="cursor:pointer"><div><h2>Paid-time attribution gaps</h2><p class="muted">Top 25 operator shifts by unattributed paid time or WMS time outside paid hours, all dates</p></div></summary>
+ <div class="table-wrap"><table><thead><tr><th>Operator</th><th>Date</th><th class="num">Paid</th><th class="num">Logged</th><th class="num">Unattributed paid</th><th class="num">Logged outside paid</th></tr></thead>
+  <tbody>{% for r in gaps %}<tr class="clickable" data-href="{{url_for('operator_day',worker=r.worker,day=r.day)}}" tabindex="0"><td><a href="{{url_for('operator',worker=r.worker)}}">{{r.worker}}</a></td><td><a href="{{url_for('operator_day',worker=r.worker,day=r.day)}}">{{r.day}}</a></td><td class="num">{{(r.paid/3600)|hours}}</td><td class="num">{{(r.logged/3600)|hours}}</td><td class="num">{{(r.unattributed/3600)|hours}}</td><td class="num">{{(r.outside/3600)|hours}}</td></tr>{% endfor %}</tbody>
+ </table></div></details>
+</section>
+{% endif %}
+{% endblock %}

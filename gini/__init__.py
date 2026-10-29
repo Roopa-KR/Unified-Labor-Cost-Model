@@ -1,0 +1,1 @@
+"""GiNi deterministic labor economics."""

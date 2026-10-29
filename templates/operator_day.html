@@ -1,0 +1,63 @@
+{% extends 'base.html' %}
+{% block crumbs %}<nav class="crumbs" aria-label="Breadcrumb"><a href="{{url_for('view',page='operators')}}">Operators</a><span aria-hidden="true">/</span><a href="{{url_for('operator',worker=worker)}}">{{worker}}</a><span aria-hidden="true">/</span><span>{{day}}</span></nav>{% endblock %}
+{% block heading %}{{worker}} · {{day}}{% endblock %}
+{% block badges %}<span class="chip">{{info.job}}</span><span class="chip">{{ui.shift_label(info.shift)}} shift</span>{% endblock %}
+{% block filters %}<div class="inline-form">{% if prev %}<a class="btn" href="{{url_for('operator_day',worker=worker,day=prev)}}">{{ui.icon('back')}}{{prev[5:]}}</a>{% endif %}{% if next %}<a class="btn" href="{{url_for('operator_day',worker=worker,day=next)}}">{{next[5:]}}{{ui.icon('next')}}</a>{% endif %}</div>{% endblock %}
+{% block content %}
+{% set lines = d.tasks.values()|map(attribute=0)|sum %}
+{% set earned = d.tasks.values()|map(attribute=2)|sum %}
+{% set direct_h = d.activities|selectattr('bucket','in',['direct','pace_loss'])|sum(attribute='hours') %}
+<section class="kpis">
+ {{ui.kpi('Shift cost', total_cents|usd, 'Loaded, at applicable rates', lead=True)}}
+ {{ui.kpi('Paid hours', total_hours|hours, ('Overtime from ' ~ d.ot_start|hm) if d.ot_start else 'No overtime')}}
+ {{ui.kpi('Productive', prod_hours|hours, ((prod_hours/total_hours) if total_hours else none)|pct ~ ' utilization')}}
+ {{ui.kpi('Unproductive', (total_hours-prod_hours)|hours, (total_cents-prod_cents)|usd)}}
+ {{ui.kpi('Lines', lines|int, 'Pace ' ~ ((earned/3600/direct_h) if direct_h and earned else none)|pct)}}
+ {{ui.kpi('Loaded rate', (d.tiers.get('ST',{}).get('rate'))|rate, ('Overtime ' ~ (d.tiers.get('OT',{}).get('rate'))|rate) if d.tiers.get('OT') else 'Straight time only')}}
+</section>
+
+<section class="panel">
+ <div class="panel-head"><div><h2>Shift timeline</h2><p class="muted">Local time · each paid minute in one category{{' · shaded area is overtime' if d.ot_start}}</p></div>{{ui.legend(['productive','policy','operational','operator','undetermined'])}}</div>
+ <div class="panel-body">{% if d.slices %}<div id="timeline" class="chart" style="height:290px"></div>{% else %}<p class="empty">No approved paid time on this date.</p>{% endif %}</div>
+</section>
+
+<div class="grid">
+ <section class="panel span-5">
+  <div class="panel-head"><div><h2>Time and cost by category</h2></div></div>
+  <div class="table-wrap"><table>
+   <thead><tr><th>Category</th><th>Work type</th><th class="num">Hours</th><th class="num">Cost</th><th class="num">Rate</th></tr></thead>
+   <tbody>{% for a in d.activities %}<tr><td><i class="swatch" style="background:{{CONTROLS[a.control][1]}}"></i>{{a.bucket_label}}</td><td class="muted">{{a.name}}</td><td class="num">{{a.hours|hours}}</td><td class="num">{{a.cents|usd}}</td><td class="num">{{a.rate|rate}}</td></tr>{% endfor %}</tbody>
+   <tfoot><tr><td colspan="2">Total</td><td class="num">{{total_hours|hours}}</td><td class="num">{{total_cents|usd}}</td><td class="num">{{(total_cents/total_hours if total_hours else none)|rate}}</td></tr></tfoot>
+  </table></div>
+  <div class="panel-foot">Slow-pace time is the part of direct time beyond standard for the lines completed; it is not placed on the timeline.</div>
+ </section>
+ <section class="panel span-7">
+  <div class="panel-head"><div><h2>Orders worked</h2><p class="muted">Direct-work cost split by time on each order; overlapping orders share time</p></div></div>
+  <div class="table-wrap limit"><table>
+   <thead><tr><th>Order</th><th>Work type</th><th class="num">Lines</th><th class="num">Time</th><th class="num">Standard</th><th class="num">Pace</th><th class="num">Cost</th><th class="num">Cost / line</th></tr></thead>
+   <tbody>{% for o in d.orders %}{% if o.order_code %}<tr class="clickable" data-href="{{url_for('order',code=o.order_code)}}" tabindex="0"><td><a href="{{url_for('order',code=o.order_code)}}">{{o.order_code}}</a><span class="sub">{{o.customers}}</span></td>{% else %}<tr><td><span class="muted">Between orders, within login</span></td>{% endif %}
+    <td>{{o.name}}</td><td class="num">{{o.lines|int if o.order_code else ''}}</td><td class="num">{{'%.0f min'|format(o.seconds/60)}}</td><td class="num">{{('%.0f min'|format(o.earned/60)) if o.earned else ''}}</td><td class="num">{{o.pace|pct if o.order_code else ''}}</td><td class="num">{{o.cents|usd}}</td><td class="num">{{(o.cents/o.lines if o.lines else none)|usd if o.order_code else ''}}</td></tr>
+   {% else %}<tr><td colspan="8" class="empty">No orders recorded for this shift.</td></tr>{% endfor %}</tbody>
+  </table></div>
+ </section>
+</div>
+{% endblock %}
+{% block scripts %}
+<script>
+const S={{d.slices|tojson}},M={{d.meals|tojson}},C=GINI.controls;
+const lanes=['productive','policy','operational','operator','undetermined'];
+const loc=s=>s.slice(0,19).replace('T',' ');
+const traces=[];
+lanes.forEach(k=>{const ss=S.filter(s=>s.control===k);if(!ss.length)return;
+ traces.push({type:'bar',orientation:'h',y:ss.map(()=>C[k][0]),base:ss.map(s=>loc(s.start_local)),x:ss.map(s=>s.seconds*1000),
+  marker:{color:C[k][1]},customdata:ss.map(s=>[s.bucket_label,(s.activity.startsWith('act-PICK')?s.name:''),loc(s.start_local).slice(11,16),loc(s.end_local).slice(11,16),(s.seconds/60).toFixed(1),s.tier==='ST'?'Straight time':(s.tier==='OT'?'Overtime':'Double time')]),
+  hovertemplate:'<b>%{customdata[0]}</b> %{customdata[1]}<br>%{customdata[2]}–%{customdata[3]} · %{customdata[4]} min<br>%{customdata[5]}<extra></extra>'})});
+if(M.length)traces.push({type:'bar',orientation:'h',y:M.map(()=>'Unpaid meal'),base:M.map(m=>loc(m.start_local)),x:M.map(m=>m.seconds*1000),marker:{color:'#ffffff',line:{color:'#9a9a96',width:1}},
+ customdata:M.map(m=>[loc(m.start_local).slice(11,16),loc(m.end_local).slice(11,16),(m.seconds/60).toFixed(0)]),hovertemplate:'Unpaid meal<br>%{customdata[0]}–%{customdata[1]} · %{customdata[2]} min<extra></extra>'});
+const order=lanes.map(k=>C[k][0]).concat(['Unpaid meal']).filter(n=>traces.some(t=>t.y[0]===n));
+const shapes=[],ann=[];
+{% if d.ot_start %}const last=S[S.length-1];shapes.push({type:'rect',xref:'x',yref:'paper',x0:loc('{{d.ot_start}}'),x1:loc(last.end_local),y0:0,y1:1,fillcolor:'rgba(235,104,52,.07)',line:{width:0},layer:'below'});
+ann.push({xref:'x',yref:'paper',x:loc('{{d.ot_start}}'),y:1.02,text:'Overtime',showarrow:false,xanchor:'left',font:{size:11,color:'#8a5a00'}});{% endif %}
+GINI.plot('timeline',traces,{barmode:'overlay',bargap:.35,margin:{t:18,r:12,b:30,l:150},xaxis:{type:'date',tickformat:'%H:%M'},yaxis:{type:'category',categoryorder:'array',categoryarray:order.slice().reverse(),gridcolor:'rgba(0,0,0,0)'},shapes,annotations:ann});
+</script>
+{% endblock %}

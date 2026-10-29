@@ -1,0 +1,59 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>{{ title|default('GiNi') }} · GiNi Labor Economics</title>
+<link rel="stylesheet" href="{{ url_for('static',filename='style.css') }}">
+{% block head %}{% endblock %}
+</head>
+<body>
+{% import '_ui.html' as ui with context %}
+{% block body %}
+<div class="shell">
+ <aside class="sidebar">
+  <a class="brand" href="/"><span class="brand-mark"><span></span></span><span>GiNi<small>Labor economics · SYN-DC100</small></span></a>
+  <nav aria-label="Main">
+  {% for group,items in nav %}{% set visible=items|selectattr(0,'in',access)|list %}{% if visible %}
+   <div class="nav-group"><h4>{{group}}</h4>{% for key,label in visible %}<a class="{{'active' if page==key}}" href="{{url_for('view',page=key)}}{{'?period='+period if period}}">{{ui.icon(key)}}{{label}}</a>{% endfor %}</div>
+  {% endif %}{% endfor %}
+  </nav>
+  <p class="data-note">Synthetic demonstration data · USD · calc v2.0</p>
+  <div class="sidebar-foot"><span>Signed in as <b>{{roles.get(session.role,session.role)}}</b></span><form action="/logout" method="post"><input type="hidden" name="csrf" value="{{session.csrf}}"><button class="btn-quiet" title="Sign out">Sign out</button></form></div>
+ </aside>
+ <div class="main">
+  <header class="topbar">
+   <div>
+    {% block crumbs %}{% endblock %}
+    <div class="title-row"><h1>{% block heading %}{{title}}{% endblock %}</h1>{% block badges %}{% endblock %}</div>
+   </div>
+   {% block filters %}{% endblock %}
+  </header>
+  <main class="content">
+   {% block content %}{% endblock %}
+  </main>
+ </div>
+</div>
+{% endblock %}
+<script src="{{ url_for('static',filename='plotly.min.js') }}"></script>
+<script>
+const GINI={
+ font:{family:getComputedStyle(document.body).fontFamily,size:12,color:'#4a5562'},
+ controls:{{CONTROLS|tojson}},
+ money:v=>(v<0?'−':'')+'$'+Math.abs(v).toLocaleString(undefined,{maximumFractionDigits:0}),
+ plot(id,data,layout={},onClick){
+  const el=document.getElementById(id);if(!el||!window.Plotly)return;
+  const base={font:this.font,paper_bgcolor:'rgba(0,0,0,0)',plot_bgcolor:'rgba(0,0,0,0)',margin:{t:8,r:12,b:36,l:56},showlegend:false,
+   hoverlabel:{bgcolor:'#fff',bordercolor:'#e1e4e8',font:{color:'#18212b',size:12}},
+   xaxis:{gridcolor:'#eceef1',linecolor:'#e1e4e8',zeroline:false,tickfont:{size:11}},yaxis:{gridcolor:'#eceef1',linecolor:'#e1e4e8',zeroline:false,tickfont:{size:11}}};
+  const merged={...base,...layout,xaxis:{...base.xaxis,...(layout.xaxis||{})},yaxis:{...base.yaxis,...(layout.yaxis||{})}};
+  Plotly.newPlot(el,data,merged,{responsive:true,displayModeBar:false});
+  if(onClick)el.on('plotly_click',e=>{const p=e.points&&e.points[0];if(p)onClick(p)});
+  if(onClick)el.style.cursor='pointer';
+ }
+};
+document.addEventListener('click',e=>{const tr=e.target.closest('tr[data-href]');if(tr&&!e.target.closest('a,button,input,select,form'))location.href=tr.dataset.href});
+document.addEventListener('keydown',e=>{const tr=e.target.closest&&e.target.closest('tr[data-href]');if(tr&&e.key==='Enter')location.href=tr.dataset.href});
+</script>
+{% block scripts %}{% endblock %}
+</body>
+</html>

@@ -1,0 +1,15 @@
+{% extends 'base.html' %}{% block body %}
+<div class="login-wrap"><div class="login-card">
+ <div class="brand"><span class="brand-mark"><span></span></span><span>GiNi<small>Labor economics</small></span></div>
+ <h1>Sign in</h1>
+ <p class="muted" style="margin-top:4px">Warehouse labor cost and productivity for SYN-DC100.</p>
+ <form method="post">
+  <input type="hidden" name="csrf" value="{{session.csrf}}">
+  <label>Role<select name="role">{% for key,label in roles.items() %}{% if key in enabled %}<option value="{{key}}">{{label}}</option>{% endif %}{% endfor %}</select></label>
+  <label>Password<input name="password" type="password" required autocomplete="current-password" autofocus></label>
+  {% if error %}<p class="error" role="alert">{{error}}</p>{% endif %}
+  <button class="primary">Sign in</button>
+ </form>
+ <p class="muted" style="margin-top:16px">First run: passwords are generated in <code>data/local_login.txt</code> (Finance) and <code>data/local_login_supervisor.txt</code> (Supervisor). Set your own in <code>.env</code>.</p>
+</div></div>
+{% endblock %}

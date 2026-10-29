@@ -1,0 +1,37 @@
+{% extends 'base.html' %}
+{% block content %}
+{% set agency=invoices|selectattr('posted_at')|list %}
+<section class="kpis">
+ {{ui.kpi('Agency invoice lines', invoices|length, (agency|length) ~ ' posted', lead=True)}}
+ {{ui.kpi('Agency billed', (agency|sum(attribute='amount')*100)|usd0, 'Includes agency burden; not burdened again')}}
+ {{ui.kpi('Disputed', invoices|selectattr('status','eq','disputed')|list|length, 'Kept in recorded expense')}}
+ {{ui.kpi('Payroll corrections', corrections|length, 'Original, reversal and replacement kept')}}
+</section>
+<section class="panel">
+ <div class="panel-head"><div><h2>Agency invoices</h2><p class="muted">Signed lines as billed; credits stay negative</p></div><a href="{{url_for('source',namespace='finance',sheet='agency_invoice_line')}}">Source rows</a></div>
+ <div class="table-wrap"><table>
+  <thead><tr><th>Invoice</th><th>Operator</th><th>Type</th><th>Service dates</th><th class="num">Regular h</th><th class="num">Overtime h</th><th class="num">Bill rate</th><th class="num">Amount</th><th>Status</th></tr></thead>
+  <tbody>{% for r in invoices %}<tr><td>{% if r.posted_at %}<a href="{{url_for('event',event_id='agency_invoice_line:'+r.id)}}">{{r.invoice_number}}-{{r.line_number}}</a>{% else %}{{r.invoice_number}}-{{r.line_number}}{% endif %}</td>
+   <td>{% if r.worker_id %}<a href="{{url_for('operator',worker=r.worker_id)}}">{{r.worker_id}}</a>{% endif %}</td><td>{{r.fee_type|label}}</td><td>{{r.service_from}} to {{r.service_to}}</td>
+   <td class="num">{{r.reg_hours|number if r.reg_hours else '—'}}</td><td class="num">{{r.ot_hours|number if r.ot_hours else '—'}}</td><td class="num">{{('$%.2f'|format(r.bill_rate)) if r.bill_rate else '—'}}</td><td class="num">{{(r.amount*100)|usd}}</td>
+   <td>{% if r.status=='disputed' %}<span class="chip warn">Disputed</span>{% elif not r.posted_at %}<span class="chip">Not posted</span>{% else %}<span class="chip good">Posted</span>{% endif %}</td></tr>{% endfor %}</tbody>
+ </table></div>
+</section>
+<div class="grid">
+ <section class="panel span-6">
+  <div class="panel-head"><div><h2>Payroll corrections</h2><p class="muted">Each correction keeps its original, reversal and replacement lines</p></div></div>
+  <div class="table-wrap"><table><thead><tr><th>Original</th><th>Reversal</th><th>Replacement</th><th>Reason</th></tr></thead>
+   <tbody>{% for r in corrections %}<tr>{% for k in ('original_line_id','reversal_line_id','replacement_line_id') %}<td class="nowrap"><a href="{{url_for('event',event_id='payroll_line:'+r[k])}}">{{r[k]}}</a></td>{% endfor %}<td class="wrap">{{r.reason}}</td></tr>{% endfor %}</tbody></table></div>
+ </section>
+ <section class="panel span-6">
+  <div class="panel-head"><div><h2>Pay codes</h2><p class="muted">How each code counts toward hours and the regular rate</p></div></div>
+  <div class="table-wrap"><table><thead><tr><th>Code</th><th>Description</th><th>Paid hours</th><th>Premium only</th></tr></thead>
+   <tbody>{% for r in pay_codes %}<tr><td><b>{{r.pay_code}}</b></td><td class="wrap">{{r.description}}</td><td>{{'Yes' if r.counts_paid_hours else 'No'}}</td><td>{{'Yes' if r.is_premium_only else 'No'}}</td></tr>{% endfor %}</tbody></table></div>
+ </section>
+</div>
+<section class="panel">
+ <details><summary class="panel-head" style="cursor:pointer"><div><h2>Budget rate assumptions</h2><p class="muted">Customer estimates and agency contract rates; used for planning, never added to actual expense</p></div></summary>
+ <div class="table-wrap"><table><thead><tr><th>Rate class</th><th class="num">Base rate</th><th class="num">FICA</th><th class="num">Workers' comp /$100</th><th class="num">Health /h</th><th class="num">Retirement</th><th class="num">OT ×</th><th>Source</th></tr></thead>
+  <tbody>{% for r in rates %}<tr><td>{{r.rate_class_value|label}}</td><td class="num">${{'%.2f'|format(r.base_hourly_rate)}}</td><td class="num">{{r.fica_fraction|pct}}</td><td class="num">{{r.workers_comp_per_100}}</td><td class="num">${{'%.2f'|format(r.health_insurance_per_hour)}}</td><td class="num">{{'%.2f%%'|format(r.retirement_fraction*100)}}</td><td class="num">{{r.ot_multiplier}}</td><td>{{r.rate_source|label}}</td></tr>{% endfor %}</tbody></table></div></details>
+</section>
+{% endblock %}

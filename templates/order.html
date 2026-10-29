@@ -1,0 +1,33 @@
+{% extends 'base.html' %}
+{% block crumbs %}<nav class="crumbs" aria-label="Breadcrumb"><a href="{{url_for('view',page='activities')}}">Work types</a><span aria-hidden="true">/</span><a href="{{url_for('activity',activity=o.activity)}}">{{o.activity_name}}</a><span aria-hidden="true">/</span><span>Order {{o.code}}</span></nav>{% endblock %}
+{% block heading %}Warehouse order {{o.code}}{% endblock %}
+{% block content %}
+<section class="kpis">
+ {{ui.kpi('Direct labor cost', o.cents|usd, 'Attributed from operator shifts', lead=True)}}
+ {{ui.kpi('Lines', o.lines|int, o.pieces|int ~ ' pieces')}}
+ {{ui.kpi('Cost per line', o.cost_per_line|usd)}}
+ {{ui.kpi('Time worked', '%.0f min'|format(o.seconds/60), 'Standard ' ~ ('%.0f min'|format(o.earned/60)))}}
+ {{ui.kpi('Pace vs standard', o.pace|pct)}}
+ {{ui.kpi('Operators', o.costs|map(attribute='worker')|unique|list|length, o.days|join(', '))}}
+</section>
+<div class="grid">
+ <section class="panel span-8">
+  <div class="panel-head"><div><h2>Labor by operator</h2><p class="muted">Each operator's direct-work cost for the time spent on this order</p></div></div>
+  <div class="table-wrap"><table>
+   <thead><tr><th>Operator</th><th>Shift date</th><th class="num">Lines</th><th class="num">Time</th><th class="num">Standard</th><th class="num">Pace</th><th class="num">Cost</th></tr></thead>
+   <tbody>{% for r in o.costs %}<tr class="clickable" data-href="{{url_for('operator_day',worker=r.worker,day=r.day)}}" tabindex="0"><td><a class="row-link" href="{{url_for('operator',worker=r.worker)}}">{{r.worker}}</a></td><td><a href="{{url_for('operator_day',worker=r.worker,day=r.day)}}">{{r.day}}</a></td>
+    <td class="num">{{r.lines|int}}</td><td class="num">{{'%.0f min'|format(r.seconds/60)}}</td><td class="num">{{'%.0f min'|format((r.earned or 0)/60)}}</td><td class="num">{{r.pace|pct}}</td><td class="num">{{r.cents|usd}}</td></tr>
+   {% else %}<tr><td colspan="7" class="empty">No operator time was recorded against this order.</td></tr>{% endfor %}</tbody>
+  </table></div>
+ </section>
+ <section class="panel span-4">
+  <div class="panel-head"><h2>Order details</h2></div>
+  <div class="panel-body"><dl class="kv">
+   <dt>Work type</dt><dd><a href="{{url_for('activity',activity=o.activity)}}">{{o.activity_name}}</a></dd>
+   <dt>Customers</dt><dd>{{o.customers|join(', ') or '—'}}</dd>
+   <dt>Customer orders</dt><dd>{{o.sales_orders[:12]|join(', ') or '—'}}{{' and %d more'|format(o.sales_orders|length-12) if o.sales_orders|length>12}}</dd>
+   <dt>Completed on</dt><dd>{{o.days|join(', ')}}</dd>
+  </dl></div>
+ </section>
+</div>
+{% endblock %}

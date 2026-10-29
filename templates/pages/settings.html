@@ -1,0 +1,22 @@
+{% extends 'base.html' %}
+{% block content %}
+{% if saved %}<div class="callout good">{{ui.icon('check')}}<span>{{'Policy saved and all figures recalculated.' if saved=='recalculated' else 'Policy saved.'}}</span></div>{% endif %}
+<form method="post" action="{{url_for('save_settings')}}" class="panel">
+ <input type="hidden" name="csrf" value="{{session.csrf}}">
+ <div class="panel-head"><div><h2>Time classification and cost allocation</h2><p class="muted">Changes recalculate every dashboard, export and API result (about 15 seconds)</p></div></div>
+ <div class="panel-body form-grid">
+ {% for key,(default,kind,label,help) in params.items() if not key.startswith('alert_') %}
+  <div class="field">{% if kind.__name__=='bool' %}<label class="toggle"><input type="checkbox" name="{{key}}" value="1" {{'checked' if values[key]}}><span>{{label}}</span></label>
+   {% else %}<label for="{{key}}">{{label}}</label><input id="{{key}}" name="{{key}}" type="number" min="0" step="any" value="{{values[key]|round(2)}}">{% endif %}
+   <span class="help">{{help}}{% if values[key]!=default %} Default: {{default}}.{% endif %}</span></div>
+ {% endfor %}
+ </div>
+ <div class="panel-head" style="border-top:1px solid var(--line-2)"><div><h2>Flag thresholds</h2><p class="muted">Used to highlight operators; they do not change any cost</p></div></div>
+ <div class="panel-body form-grid">
+ {% for key,(default,kind,label,help) in params.items() if key.startswith('alert_') %}
+  <div class="field"><label for="{{key}}">{{label}}</label><input id="{{key}}" name="{{key}}" type="number" min="0" step="any" value="{{values[key]|round(2)}}"><span class="help">{{help}}</span></div>
+ {% endfor %}
+ </div>
+ <div class="panel-foot" style="justify-content:space-between"><span>Last calculation {{last.at if last else '—'}} · version {{last.version if last else '—'}}</span><button class="primary">Save and recalculate</button></div>
+</form>
+{% endblock %}

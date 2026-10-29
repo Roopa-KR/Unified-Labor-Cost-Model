@@ -1,0 +1,164 @@
+[
+ {
+  "name": "payroll_line",
+  "period": "prd-2026-W37",
+  "source_cents": 3516289,
+  "ledger_cents": 3516289,
+  "difference_cents": 0,
+  "note": "Arithmetic matched; not controller approval. Posted disputed invoice remains in expense.",
+  "unit": "USD"
+ },
+ {
+  "name": "employer_cost",
+  "period": "prd-2026-W37",
+  "source_cents": 655734,
+  "ledger_cents": 655734,
+  "difference_cents": 0,
+  "note": "Arithmetic matched; not controller approval. Posted disputed invoice remains in expense.",
+  "unit": "USD"
+ },
+ {
+  "name": "agency_invoice_line",
+  "period": "prd-2026-W37",
+  "source_cents": 1256515,
+  "ledger_cents": 1256515,
+  "difference_cents": 0,
+  "note": "Arithmetic matched; not controller approval. Posted disputed invoice remains in expense.",
+  "unit": "USD"
+ },
+ {
+  "name": "allocation",
+  "period": "prd-2026-W37",
+  "source_cents": 5428538,
+  "ledger_cents": 5428538,
+  "difference_cents": 0,
+  "note": "Allocated plus explicit unallocated; integer cents.",
+  "unit": "USD"
+ },
+ {
+  "name": "operator cost allocation",
+  "period": "prd-2026-W37",
+  "source_cents": 5428538,
+  "ledger_cents": 5428538,
+  "difference_cents": 0,
+  "note": "Every operator-linked source amount distributed to that operator's productive, unproductive or non-time buckets.",
+  "unit": "USD"
+ },
+ {
+  "name": "paid time partition",
+  "period": "prd-2026-W37",
+  "source_cents": 6920765,
+  "ledger_cents": 6920765,
+  "difference_cents": 0,
+  "note": "Approved paid seconds versus the sum of mutually exclusive productive and unproductive time parts.",
+  "unit": "seconds"
+ },
+ {
+  "name": "overtime hours: timeclock vs payroll",
+  "period": "prd-2026-W37",
+  "source_cents": 1216148,
+  "ledger_cents": 1219443,
+  "difference_cents": -3295,
+  "note": "Overtime tiers re-derived from paid attendance under the assigned pay policy versus posted payroll OTP/DTP and agency OT hours. Posted payroll remains authoritative; differences are payroll review items.",
+  "unit": "seconds"
+ },
+ {
+  "name": "order cost attribution",
+  "period": "prd-2026-W37",
+  "source_cents": 4738629,
+  "ledger_cents": 4738629,
+  "difference_cents": 0,
+  "note": "Direct-work cost versus cost attributed to orders plus time between orders.",
+  "unit": "USD"
+ },
+ {
+  "name": "GL expense accounts 6xxx",
+  "period": "prd-2026-W37",
+  "source_cents": 5428538,
+  "ledger_cents": 5428538,
+  "difference_cents": 0,
+  "note": "Journal period mapped from JE-<period_code>; expense accounts 6xxx only. Aggregate match; cost-center and timing sign-off still pending.",
+  "unit": "USD"
+ },
+ {
+  "name": "payroll_line",
+  "period": "prd-2026-W38",
+  "source_cents": 3722316,
+  "ledger_cents": 3722316,
+  "difference_cents": 0,
+  "note": "Arithmetic matched; not controller approval. Posted disputed invoice remains in expense.",
+  "unit": "USD"
+ },
+ {
+  "name": "employer_cost",
+  "period": "prd-2026-W38",
+  "source_cents": 677435,
+  "ledger_cents": 677435,
+  "difference_cents": 0,
+  "note": "Arithmetic matched; not controller approval. Posted disputed invoice remains in expense.",
+  "unit": "USD"
+ },
+ {
+  "name": "agency_invoice_line",
+  "period": "prd-2026-W38",
+  "source_cents": 1544538,
+  "ledger_cents": 1544538,
+  "difference_cents": 0,
+  "note": "Arithmetic matched; not controller approval. Posted disputed invoice remains in expense.",
+  "unit": "USD"
+ },
+ {
+  "name": "allocation",
+  "period": "prd-2026-W38",
+  "source_cents": 5944289,
+  "ledger_cents": 5944289,
+  "difference_cents": 0,
+  "note": "Allocated plus explicit unallocated; integer cents.",
+  "unit": "USD"
+ },
+ {
+  "name": "operator cost allocation",
+  "period": "prd-2026-W38",
+  "source_cents": 5944289,
+  "ledger_cents": 5944289,
+  "difference_cents": 0,
+  "note": "Every operator-linked source amount distributed to that operator's productive, unproductive or non-time buckets.",
+  "unit": "USD"
+ },
+ {
+  "name": "paid time partition",
+  "period": "prd-2026-W38",
+  "source_cents": 7013011,
+  "ledger_cents": 7013011,
+  "difference_cents": 0,
+  "note": "Approved paid seconds versus the sum of mutually exclusive productive and unproductive time parts.",
+  "unit": "seconds"
+ },
+ {
+  "name": "overtime hours: timeclock vs payroll",
+  "period": "prd-2026-W38",
+  "source_cents": 1369145,
+  "ledger_cents": 1369534,
+  "difference_cents": -389,
+  "note": "Overtime tiers re-derived from paid attendance under the assigned pay policy versus posted payroll OTP/DTP and agency OT hours. Posted payroll remains authoritative; differences are payroll review items.",
+  "unit": "seconds"
+ },
+ {
+  "name": "order cost attribution",
+  "period": "prd-2026-W38",
+  "source_cents": 4707296,
+  "ledger_cents": 4707296,
+  "difference_cents": 0,
+  "note": "Direct-work cost versus cost attributed to orders plus time between orders.",
+  "unit": "USD"
+ },
+ {
+  "name": "GL expense accounts 6xxx",
+  "period": "prd-2026-W38",
+  "source_cents": 5944289,
+  "ledger_cents": 5944289,
+  "difference_cents": 0,
+  "note": "Journal period mapped from JE-<period_code>; expense accounts 6xxx only. Aggregate match; cost-center and timing sign-off still pending.",
+  "unit": "USD"
+ }
+]
