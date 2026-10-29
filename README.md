@@ -18,7 +18,7 @@ py -3.12 -m venv .venv
 .\.venv\Scripts\python.exe app.py
 ```
 
-If Python 3.12 is not installed, use an installed Python 3.11+ interpreter with `python -m venv .venv`. Using the explicit virtual-environment Python path avoids PowerShell activation-policy issues.
+Run the three commands in order. The first command creates `.venv`; the second installs the dependencies into it; the third starts the application. If Python 3.12 is not installed, replace the first command with `python -m venv .venv` (or another installed Python 3.11+ interpreter). Using the explicit virtual-environment Python path avoids PowerShell activation-policy issues.
 
 4. Open **http://127.0.0.1:5007**.
 5. Choose **Finance** or **Supervisor**. The first start generates the passwords in `data/local_login.txt` (Finance) and `data/local_login_supervisor.txt` (Supervisor). Open the file in VS Code and paste its contents into the password field. Passwords are generated locally; no shared password is shipped.
