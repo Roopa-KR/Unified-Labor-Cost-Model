@@ -40,9 +40,10 @@ def activities(c,period=''):
 def customers(c,period=''):
  # Only activity-attributable allocations are assigned. Remaining site costs stay unassigned.
  acts=activities(c,period);args=(period,) if period else ()
- money=defaultdict(int);qty=defaultdict(int)
+ money=defaultdict(int);qty=defaultdict(int);by_activity=defaultdict(list)
+ for r in query(c,'SELECT activity,customer,count(*) n FROM task'+(' WHERE period=?' if period else '')+' GROUP BY activity,customer ORDER BY activity,customer',args):by_activity[r['activity']].append(r)
  for a in acts:
-  qq=query(c,'SELECT customer,count(*) n FROM task WHERE activity=?'+(' AND period=?' if period else '')+' GROUP BY customer ORDER BY customer',(a['activity'],)+args)
+  qq=by_activity.get(a['activity'])
   if not qq:continue
   allocations=allocate(a['cents'],[r['n'] for r in qq])
   for r,amount in zip(qq,allocations):money[r['customer']]+=amount;qty[r['customer']]+=r['n']
@@ -58,11 +59,14 @@ def bridge(c,period='',version=''):
  versions=sorted({r['budget_version'] for r in budgets});version=version or (versions[-1] if versions else '')
  budgets=[r for r in budgets if r['budget_version']==version]
  baseline=sum(cents(r['budget_amount']) for r in budgets);vol=Decimal(0);mix=Decimal(0)
+ counts={(r[0],r[1]):r[2] for r in c.execute('SELECT period,activity,count(*) FROM task GROUP BY period,activity')}
+ by_period={}  # activities() is the expensive part; compute it once per period, not once per budget line
  for b in budgets:
-  actual=c.execute('SELECT count(*) FROM task WHERE period=? AND activity=?',(b['period_id'],b['activity_id'])).fetchone()[0]
+  actual=counts.get((b['period_id'],b['activity_id']),0)
   rate=Decimal(str(b['base_hourly_rate']));h=Decimal(str(b['standard_hours_per_unit']))
   vol+=(Decimal(actual)-Decimal(str(b['volume'])))*h*rate
-  activity=next((r for r in activities(c,b['period_id']) if r['activity']==b['activity_id']),None)
+  if b['period_id'] not in by_period:by_period[b['period_id']]={r['activity']:r for r in activities(c,b['period_id'])}
+  activity=by_period[b['period_id']].get(b['activity_id'])
   if activity and activity['earned_hours'] is not None:mix+=(Decimal(str(activity['earned_hours']))-Decimal(actual)*h)*rate
  actual=summary(c,period)['total_cents'];v=cents(vol);m=cents(mix)
  return dict(version=version,versions=versions,budget_cents=baseline,actual_cents=actual,steps=[dict(label='Budget',cents=baseline),dict(label='Volume',cents=v),dict(label='Standard change',cents=m),dict(label='Other / unexplained',cents=actual-baseline-v-m),dict(label='Actual',cents=actual)],note='Other / unexplained includes rate, efficiency, indirect time, non-comparable expense scope and all interactions. It is not a diagnosed cause or a saving. Standards are retrospectively validated; this is not an as-known-at-the-time benchmark.')

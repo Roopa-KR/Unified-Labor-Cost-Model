@@ -42,6 +42,7 @@
  </section>
 </div>
 {% endblock %}
+{% block plotly %}<script src="{{ url_for('static',filename='plotly.min.js') }}"></script>{% endblock %}
 {% block scripts %}
 <script>
 const S={{d.slices|tojson}},M={{d.meals|tojson}},C=GINI.controls;

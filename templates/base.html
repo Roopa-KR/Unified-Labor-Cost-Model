@@ -34,7 +34,8 @@
  </div>
 </div>
 {% endblock %}
-<script src="{{ url_for('static',filename='plotly.min.js') }}"></script>
+{# Plotly is about 5 MB: only pages that draw charts load it. #}
+{% block plotly %}{% endblock %}
 <script>
 const GINI={
  font:{family:getComputedStyle(document.body).fontFamily,size:12,color:'#4a5562'},

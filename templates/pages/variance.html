@@ -21,6 +21,7 @@
  </section>
 </div>
 {% endblock %}
+{% block plotly %}<script src="{{ url_for('static',filename='plotly.min.js') }}"></script>{% endblock %}
 {% block scripts %}<script>
 const b={{bridge.steps|tojson}};
 GINI.plot('waterfall',[{type:'waterfall',x:b.map(x=>x.label),y:b.map(x=>x.cents/100),measure:['absolute','relative','relative','relative','total'],connector:{line:{color:'#e1e4e8',width:1}},

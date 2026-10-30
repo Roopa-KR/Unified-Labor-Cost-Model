@@ -3,7 +3,7 @@ from pathlib import Path
 from flask import Flask,render_template,request,session,redirect,url_for,abort,jsonify,Response,g
 from werkzeug.security import generate_password_hash,check_password_hash
 from dotenv import load_dotenv
-from gini.db import connect,DEFAULT_DB,ROOT,rows,migrate,SCHEMA_VERSION
+from gini.db import connect,DEFAULT_DB,ROOT,rows,migrate,prepare,sheet_counts,SCHEMA_VERSION
 from gini.services import summary,ledger,activities,customers,bridge,query
 from gini import operators as ops
 from gini import policy as policy_mod
@@ -46,6 +46,9 @@ def create_app(test_config=None):
  if old:
   from gini.engine import calculate
   print('GiNi: upgrading database to calculation version 2.0 …',flush=True);calculate(app.config['DATABASE'])
+ c=connect(app.config['DATABASE'])
+ try:prepare(c)
+ finally:c.close()
 
  def db():
   if 'db' not in g:g.db=connect(app.config['DATABASE'])
@@ -71,8 +74,19 @@ def create_app(test_config=None):
    abort(503,'Source snapshots or cost policy changed. Run python -m gini.engine before reporting.')
  @app.after_request
  def headers(response):
-  response.headers['X-Content-Type-Options']='nosniff';response.headers['X-Frame-Options']='DENY';response.headers['Cache-Control']='no-store'
+  response.headers['X-Content-Type-Options']='nosniff';response.headers['X-Frame-Options']='DENY'
+  # Versioned static files never change under the same URL; reports and data stay uncached.
+  if request.endpoint=='static':response.headers['Cache-Control']='public, max-age=31536000, immutable' if request.args.get('v') else 'no-cache'
+  else:response.headers['Cache-Control']='no-store'
   return response
+ static_versions={}
+ @app.url_defaults
+ def static_version(endpoint,values):
+  if endpoint=='static' and 'filename' in values:
+   f=values['filename']
+   if f not in static_versions:
+    p=Path(app.static_folder)/f;static_versions[f]=int(p.stat().st_mtime) if p.is_file() else None
+   if static_versions[f]:values['v']=static_versions[f]
  def role():return session.get('role')
  def allow(page):
   if page not in ACCESS.get(role(),set()):abort(403)
@@ -184,7 +198,7 @@ def create_app(test_config=None):
    page_no=max(1,request.args.get('p',1,type=int));rs,count,total=ledger(c,period,request.args.get('worker',''),request.args.get('component',''),request.args.get('q',''),100,(page_no-1)*100)
    ctx.update(records=rs,count=count,filtered_total=total,page_no=page_no,components=[r[0] for r in c.execute('select distinct component from event order by 1')],
     workers=[r[0] for r in c.execute('select distinct worker from event where worker is not null order by 1')])
-  if page=='data':ctx.update(inventory=query(c,'select r.namespace,sheet,count(*) records,b.filename from raw r join active_file a on r.batch_id=a.batch_id join batch b on b.id=a.batch_id group by r.namespace,sheet'),batches=query(c,'select * from batch order by id'),issues=list(rows(c,'foundation','data_quality_issue'))[:100])
+  if page=='data':ctx.update(inventory=[dict(r) for r in sheet_counts(c)],batches=query(c,'select * from batch order by id'),issues=list(rows(c,'foundation','data_quality_issue'))[:100])
   if page=='settings':ctx.update(params=policy_mod.PARAMETERS,values=policy_mod.load(c),last=c.execute('select * from calculation_run order by id desc limit 1').fetchone(),saved=request.args.get('saved'))
   audit('view',page+':'+period)
   return render(page,period=period,**ctx)
@@ -304,10 +318,10 @@ def create_app(test_config=None):
   finance();c=db()
   # Only active known sources; no unrestricted SQL, filesystem or test truth route.
   if not c.execute('select 1 from raw r join active_file a on a.batch_id=r.batch_id where r.namespace=? and sheet=?',(namespace,sheet)).fetchone():abort(404)
-  page=max(1,request.args.get('p',1,type=int));rs=query(c,'select r.id,row_no,record_key,payload from raw r join active_file a on a.batch_id=r.batch_id where r.namespace=? and sheet=? order by row_no limit 100 offset ?',(namespace,sheet,(page-1)*100))
+  page=max(1,request.args.get('p',1,type=int));rs=query(c,'select r.id,row_no,record_key,payload from active_file a join raw r on r.batch_id=a.batch_id and r.sheet=? where a.namespace=? and r.namespace=? order by r.row_no limit 100 offset ?',(sheet,namespace,namespace,(page-1)*100))
   records=[dict(r,data=json.loads(r['payload'])) for r in rs]
   cols=[k for k in (records[0]['data'] if records else {}) if k not in ('source_system_id','source_record_key','record_version','raw_record_id','recorded_at')]
-  total=c.execute('select count(*) from raw r join active_file a on a.batch_id=r.batch_id where r.namespace=? and sheet=?',(namespace,sheet)).fetchone()[0]
+  total=c.execute('select count(*) from active_file a join raw r on r.batch_id=a.batch_id and r.sheet=? where a.namespace=? and r.namespace=?',(sheet,namespace,namespace)).fetchone()[0]
   audit('source_read',namespace+'/'+sheet);return render('data','source.html',title=sheet.replace('_',' ').capitalize(),namespace=namespace,sheet=sheet,records=records,cols=cols,page_no=page,total=total)
  @app.route('/investigate',methods=['POST'])
  def investigate():

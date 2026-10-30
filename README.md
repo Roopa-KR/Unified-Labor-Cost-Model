@@ -24,7 +24,7 @@ Run the three commands in order. The first command creates `.venv` using the act
 5. Choose **Finance** or **Supervisor**. The first start generates the passwords in `data/local_login.txt` (Finance) and `data/local_login_supervisor.txt` (Supervisor). Open the file in VS Code and paste its contents into the password field. Passwords are generated locally; no shared password is shipped.
 6. Keep the terminal running. Press Ctrl+C to stop.
 
-The supplied database is already imported and calculated with version 2.0. **You do not need to initialize it to run the demonstration.** If you start the app against an older version 1.0 database, it upgrades the schema and recalculates once on startup (about 15 seconds). It contains source evidence as database records, not the test-truth workbook or restricted employee PII.
+The supplied database is already imported and calculated with version 2.0. **You do not need to initialize it to run the demonstration.** If you start the app against an older version 1.0 database, it upgrades the schema and recalculates once on startup (about 15 seconds). On first start the app also switches the database to WAL journaling and builds its reporting indexes and source record counts once (a few seconds); later starts skip this. It contains source evidence as database records, not the test-truth workbook or restricted employee PII.
 
 ## Optional configuration
 

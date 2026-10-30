@@ -46,6 +46,7 @@
  </section>
 </div>
 {% endblock %}
+{% block plotly %}<script src="{{ url_for('static',filename='plotly.min.js') }}"></script>{% endblock %}
 {% block scripts %}
 <script>
 const daily={{daily|tojson}};const C=GINI.controls;

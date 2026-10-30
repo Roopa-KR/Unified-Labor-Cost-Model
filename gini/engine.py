@@ -70,6 +70,7 @@ def calculate(db=DEFAULT_DB):
    if h:sales[r['task_id']].add(h['order_code'])
   order_activity={};queue_events=defaultdict(list)
   earned=defaultdict(float);line_count=defaultdict(int);completions=defaultdict(list)
+  task_rows=[]
   for r in rows(c,'operations','warehouse_task'):
    order_activity[r['warehouse_order_code']]=r['activity_id']
    if r.get('created_at'):
@@ -83,7 +84,8 @@ def calculate(db=DEFAULT_DB):
     line_count[(r['worker_id'],day,r['activity_id'])]+=1
     if es:earned[(r['worker_id'],day,r['activity_id'])]+=es
    so=sales[r['id']]
-   c.execute('insert into task(id,raw_id,worker,day,period,activity,order_code,pieces,customer,earned_seconds,sales_order) values(?,?,?,?,?,?,?,?,?,?,?)',(r['id'],r['_raw_id'],r.get('worker_id'),day,period_for(day),r['activity_id'],r['warehouse_order_code'],r.get('completed_qty'),next(iter(customers)) if len(customers)==1 else None,es,next(iter(so)) if len(so)==1 else None))
+   task_rows.append((r['id'],r['_raw_id'],r.get('worker_id'),day,period_for(day),r['activity_id'],r['warehouse_order_code'],r.get('completed_qty'),next(iter(customers)) if len(customers)==1 else None,es,next(iter(so)) if len(so)==1 else None))
+  c.executemany('insert into task(id,raw_id,worker,day,period,activity,order_code,pieces,customer,earned_seconds,sales_order) values(?,?,?,?,?,?,?,?,?,?,?)',task_rows)
 
   # Periods when an activity had no released, uncompleted work: idle then is waiting for work, not operator idle.
   no_work=defaultdict(list)
@@ -146,11 +148,12 @@ def calculate(db=DEFAULT_DB):
   parts=defaultdict(float)   # (worker,day,activity,labor_class,bucket,annotated,tier) -> seconds
   direct_slices=defaultdict(list)  # (worker,day,activity) -> [(a,b)]
   ot_seconds=defaultdict(float)
+  day_rows=[];slice_rows=[]
   for worker,day in keys:
    key=worker,day;pp=union(paid[key]);ll=union(logged[key]);ss=classify(pp,events[key])
    un=sum(b-a for a,b,act,cl in ss if act=='unattributed' or cl in ('unexplained','unattributed','conflict'))
    conflict=sum(b-a for a,b,act,cl in ss if cl=='conflict');match=duration(intersect(pp,ll))
-   c.execute('insert into time_day(worker,day,paid,logged,matched,outside,unattributed,conflict,meal) values(?,?,?,?,?,?,?,?,?)',(worker,day,duration(pp),duration(ll),match,duration(ll)-match,un,conflict,duration(union(meals[key]))))
+   day_rows.append((worker,day,duration(pp),duration(ll),match,duration(ll)-match,un,conflict,duration(union(meals[key]))))
    if not ss:continue
    pol=pay_policy(worker,day);wk=week_start(day,pol)
    no_work_ivs=[]
@@ -172,18 +175,19 @@ def calculate(db=DEFAULT_DB):
    for a,b,payload,tier in tiers([(a,b,p) for a,b,*p in day_parts],st_end,dt_start):
     act,cl,bucket,ann=payload
     ctrl=pol_mod.control_for(bucket,policy,ann)
-    c.execute('insert into time_slice(worker,day,start,end,activity,labor_class,seconds,bucket,control,tier,start_local,end_local) values(?,?,?,?,?,?,?,?,?,?,?,?)',
-     (worker,day,datetime.fromtimestamp(a,timezone.utc).isoformat(),datetime.fromtimestamp(b,timezone.utc).isoformat(),act,cl,b-a,bucket,ctrl,tier,_local(a,off),_local(b,off)))
+    slice_rows.append((worker,day,datetime.fromtimestamp(a,timezone.utc).isoformat(),datetime.fromtimestamp(b,timezone.utc).isoformat(),act,cl,b-a,bucket,ctrl,tier,_local(a,off),_local(b,off)))
     parts[(worker,day,act,cl,bucket,ann,tier)]+=b-a
     if bucket=='direct':direct_slices[(worker,day,act)].append((a,b))
     if tier!='ST':ot_seconds[(worker,day,tier)]+=b-a
+  c.executemany('insert into time_day(worker,day,paid,logged,matched,outside,unattributed,conflict,meal) values(?,?,?,?,?,?,?,?,?)',day_rows)
+  c.executemany('insert into time_slice(worker,day,start,end,activity,labor_class,seconds,bucket,control,tier,start_local,end_local) values(?,?,?,?,?,?,?,?,?,?,?,?)',slice_rows)
 
   # Pace: direct time beyond standard time for the lines completed that day is slow-pace time (cause not established).
   direct_total=defaultdict(float)
   for (w,d,act,cl,bucket,ann,tier),s in parts.items():
    if bucket=='direct':direct_total[(w,d,act)]+=s
   tol=1+policy['pace_tolerance_pct']/100
-  worker_parts=defaultdict(list)
+  worker_parts=defaultdict(list);part_rows=[]
   for (w,d,act,cl,bucket,ann,tier),s in sorted(parts.items()):
    pieces=[(bucket,s)]
    if bucket=='direct':
@@ -194,11 +198,13 @@ def calculate(db=DEFAULT_DB):
    for b_,sec in pieces:
     if sec<=0:continue
     ctrl=pol_mod.control_for(b_,policy,ann);prod=int(pol_mod.is_productive(b_,policy))
-    c.execute('insert into time_part values(?,?,?,?,?,?,?,?,?)',(w,d,act,cl,b_,ctrl,tier,prod,sec))
+    part_rows.append((w,d,act,cl,b_,ctrl,tier,prod,sec))
     worker_parts[w].append((d,act,cl,b_,ctrl,tier,prod,sec))
+  c.executemany('insert into time_part values(?,?,?,?,?,?,?,?,?)',part_rows)
 
   # Allocation: every source event -> worker paid time parts in its service window. Integer cents, exact.
   ins='insert into allocation(event_id,day,activity,labor_class,seconds,cents,method,bucket,control,tier,productive) values(?,?,?,?,?,?,?,?,?,?,?)'
+  alloc_rows=[]
   def spread(e,amount,ss,weight,method):
    groups=defaultdict(float);secs=defaultdict(float)
    for d,act,cl,b_,ctrl,tier,prod,sec in ss:
@@ -207,11 +213,11 @@ def calculate(db=DEFAULT_DB):
    keys_=sorted(groups);amounts=allocate(amount,[groups[k] for k in keys_])
    if not amounts:return False
    for k,v in zip(keys_,amounts):
-    d,act,cl,b_,ctrl,tier,prod=k;c.execute(ins,(e['id'],d,act,cl,secs[k],v,method,b_,ctrl,tier,prod))
+    d,act,cl,b_,ctrl,tier,prod=k;alloc_rows.append((e['id'],d,act,cl,secs[k],v,method,b_,ctrl,tier,prod))
    return True
   def unallocated(e,amount,bucket,method):
    ctrl='policy' if bucket=='paid_leave' else 'other' if bucket=='non_time' else 'undetermined'
-   c.execute(ins,(e['id'],e['service_from'],'unallocated','unallocated',0,amount,method,bucket,ctrl,'NA',0))
+   alloc_rows.append((e['id'],e['service_from'],'unallocated','unallocated',0,amount,method,bucket,ctrl,'NA',0))
   for e in c.execute('select * from event').fetchall():
    ss=[p for p in worker_parts.get(e['worker'],[]) if e['service_from']<=p[0]<e['service_to']]
    if e['component']=='paid_leave':unallocated(e,e['cents'],'paid_leave','paid_leave_not_worked');continue
@@ -229,6 +235,7 @@ def calculate(db=DEFAULT_DB):
     if premium and not spread(e,premium,ss,lambda t:{'OT':0.5,'DT':1.0}.get(t,0),'premium_on_overtime_hours_v2'):spread(e,premium,ss,lambda t:1,'premium_fallback_paid_time_v2')
     continue
    spread(e,e['cents'],ss,lambda t:1,'loaded_time_v2')
+  c.executemany(ins,alloc_rows)
 
   # Order attribution: direct (incl. slow-pace) cost of a worker-day-activity spread over the orders worked,
   # concurrent orders share elapsed time equally, and time between orders stays as its own row (no double counting).
@@ -236,7 +243,7 @@ def calculate(db=DEFAULT_DB):
   for r in c.execute("select e.worker,a.day,a.activity,sum(a.cents) cents from allocation a join event e on e.id=a.event_id where a.bucket in ('direct','pace_loss') group by 1,2,3"):direct_cost[(r[0],r[1],r[2])]=r[3]
   direct_secs=defaultdict(float)
   for r in c.execute("select worker,day,activity,sum(seconds) from time_part where bucket in ('direct','pace_loss') group by 1,2,3"):direct_secs[(r[0],r[1],r[2])]=r[3]
-  orders_by=defaultdict(list)
+  orders_by=defaultdict(list);order_rows=[]
   for r in rows(c,'operations','task_worker'):
    if not r.get('worker_id') or not r.get('ends_at'):continue
    act=order_activity.get(r['warehouse_order_code']);a,b=interval(r)
@@ -255,7 +262,8 @@ def calculate(db=DEFAULT_DB):
    weights=[secs[k] for k in order_codes]+[rest]
    amounts=allocate(C,weights) or ([0]*len(order_codes)+[C])
    for k,v in zip(order_codes+[None],amounts):
-    c.execute('insert into order_cost values(?,?,?,?,?,?,?)',(key[0],key[1],key[2],k,secs[k] if k else rest,line_of[k] if k else 0,v))
+    order_rows.append((key[0],key[1],key[2],k,secs[k] if k else rest,line_of[k] if k else 0,v))
+  c.executemany('insert into order_cost values(?,?,?,?,?,?,?)',order_rows)
 
   # Controls.
   ins_check='insert into check_result(name,period,source_cents,ledger_cents,difference_cents,note,unit) values(?,?,?,?,?,?,?)'
